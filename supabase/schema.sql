@@ -239,13 +239,13 @@ create trigger on_auth_user_created
 create or replace view ads_with_creators as
 select
   ap.*,
-  c.id as creator_id,
-  c.name as creator_name,
-  c.handle as creator_handle,
+  c.creator_id,
+  c.creator_name,
+  c.creator_handle,
   s.name as sport_name
 from ad_performance ap
 left join lateral (
-  select cp.creator_id, cr.name, cr.handle
+  select cp.creator_id, cr.name as creator_name, cr.handle as creator_handle
   from creator_patterns cp
   join creators cr on cp.creator_id = cr.id
   where ap.ad_name ilike '%' || cp.pattern || '%'
