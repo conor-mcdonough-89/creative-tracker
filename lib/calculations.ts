@@ -2,11 +2,31 @@
 export const REVENUE_RATE = 0.115 // 11.5% of GMV (conversion_value) is revenue
 export const PAYOUT_RATE = 0.10  // 10% of revenue goes to creator
 
-// Platform-specific conversion discounts (to account for over-reporting)
-export const PLATFORM_CONVERSION_DISCOUNTS: Record<string, number> = {
+// Admin email for restricted settings
+export const ADMIN_EMAIL = 'conor@sidelineswap.com'
+
+// Default platform-specific conversion discounts (fallback if DB not loaded)
+export const DEFAULT_PLATFORM_DISCOUNTS: Record<string, number> = {
   meta: 0.50, // Discount Meta conversions by 50%
   tiktok: 0,
   google: 0,
+}
+
+// Mutable store for platform discounts (loaded from DB)
+let platformDiscounts: Record<string, number> = { ...DEFAULT_PLATFORM_DISCOUNTS }
+
+/**
+ * Set platform discounts (called when loaded from database)
+ */
+export function setPlatformDiscounts(discounts: Record<string, number>) {
+  platformDiscounts = { ...DEFAULT_PLATFORM_DISCOUNTS, ...discounts }
+}
+
+/**
+ * Get current platform discounts
+ */
+export function getPlatformDiscounts(): Record<string, number> {
+  return { ...platformDiscounts }
 }
 
 /**
@@ -93,7 +113,7 @@ export function applyConversionDiscount(
   conversionValue: number,
   platform?: string
 ): { conversions: number; conversion_value: number } {
-  const discount = platform ? (PLATFORM_CONVERSION_DISCOUNTS[platform] ?? 0) : 0
+  const discount = platform ? (platformDiscounts[platform] ?? 0) : 0
   const multiplier = 1 - discount
   return {
     conversions: conversions * multiplier,

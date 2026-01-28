@@ -13,6 +13,7 @@ import {
   Trophy,
   ChevronDown,
   Video,
+  SlidersHorizontal,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -54,6 +55,11 @@ const settingsNavigation = [
     name: 'Sports',
     href: '/settings/sports',
     icon: Trophy,
+  },
+  {
+    name: 'Platform Adjustments',
+    href: '/settings/adjustments',
+    icon: SlidersHorizontal,
   },
 ]
 

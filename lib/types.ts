@@ -14,6 +14,14 @@ export interface Sport {
   created_at: string
 }
 
+// Platform adjustments (for conversion discounts)
+export interface PlatformAdjustment {
+  platform: Platform
+  conversion_discount: number // 0 to 1, e.g., 0.50 = 50% discount
+  updated_at: string
+  updated_by: string | null
+}
+
 // Creator
 export interface Creator {
   id: string

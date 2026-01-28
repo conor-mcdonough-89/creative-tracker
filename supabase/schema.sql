@@ -321,3 +321,37 @@ select
 from creator_videos cv
 left join creators c on cv.creator_id = c.id
 left join sports s on cv.sport_id = s.id;
+
+-- Platform adjustments table (for conversion discounts, etc.)
+create table if not exists platform_adjustments (
+  platform platform_enum primary key,
+  conversion_discount numeric(4,3) not null default 0, -- 0 to 1, e.g., 0.50 = 50% discount
+  updated_at timestamp with time zone default now(),
+  updated_by text
+);
+
+-- Seed default platform adjustments
+insert into platform_adjustments (platform, conversion_discount) values
+  ('meta', 0.50),
+  ('tiktok', 0),
+  ('google', 0)
+on conflict (platform) do nothing;
+
+-- Trigger for updated_at
+drop trigger if exists update_platform_adjustments_updated_at on platform_adjustments;
+create trigger update_platform_adjustments_updated_at
+  before update on platform_adjustments
+  for each row execute function update_updated_at_column();
+
+-- RLS for platform_adjustments
+alter table platform_adjustments enable row level security;
+
+-- Everyone can read adjustments (needed for calculations)
+drop policy if exists "Authenticated users can read platform_adjustments" on platform_adjustments;
+create policy "Authenticated users can read platform_adjustments" on platform_adjustments
+  for select using (auth.role() = 'authenticated');
+
+-- Only admin can update (enforced at app level, but RLS allows authenticated users to update)
+drop policy if exists "Authenticated users can update platform_adjustments" on platform_adjustments;
+create policy "Authenticated users can update platform_adjustments" on platform_adjustments
+  for update using (auth.role() = 'authenticated');

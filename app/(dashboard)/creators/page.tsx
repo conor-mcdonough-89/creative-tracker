@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { DateRangePicker } from '@/components/dashboard/DateRangePicker'
 import { FilterBar } from '@/components/dashboard/FilterBar'
 import { CreatorTable } from '@/components/creators/CreatorTable'
+import { usePlatformAdjustments } from '@/hooks/usePlatformAdjustments'
 import { aggregatePerformance } from '@/lib/calculations'
 import { Plus, Download } from 'lucide-react'
 import type { Platform, Sport, Creator, CreatorPattern, AdPerformance, CreatorWithPerformance } from '@/lib/types'
@@ -30,6 +31,9 @@ export default function CreatorsPage() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
 
   const supabase = createClient()
+
+  // Load platform adjustments (for conversion discounts)
+  usePlatformAdjustments()
 
   // Load reference data
   useEffect(() => {

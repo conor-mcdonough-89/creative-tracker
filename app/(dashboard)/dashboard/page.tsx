@@ -11,6 +11,7 @@ import { GranularityToggle } from '@/components/dashboard/GranularityToggle'
 import { TimeSeriesChart } from '@/components/dashboard/TimeSeriesChart'
 import { PlatformBreakdownChart } from '@/components/dashboard/PlatformBreakdownChart'
 import { SportBreakdownChart } from '@/components/dashboard/SportBreakdownChart'
+import { usePlatformAdjustments } from '@/hooks/usePlatformAdjustments'
 import {
   formatCurrency,
   formatPercentage,
@@ -36,6 +37,9 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
 
   const supabase = createClient()
+
+  // Load platform adjustments (for conversion discounts)
+  usePlatformAdjustments()
 
   // Load reference data
   useEffect(() => {
