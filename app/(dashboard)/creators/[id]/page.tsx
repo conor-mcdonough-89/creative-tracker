@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { subDays, format } from 'date-fns'
+import { format } from 'date-fns'
 import { DateRange } from 'react-day-picker'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -28,7 +28,7 @@ import {
 } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { MetricCard } from '@/components/dashboard/MetricCard'
-import { DateRangePicker } from '@/components/dashboard/DateRangePicker'
+import { DateRangePicker, getDefaultDateRange } from '@/components/dashboard/DateRangePicker'
 import { GranularityToggle } from '@/components/dashboard/GranularityToggle'
 import { TimeSeriesChart } from '@/components/dashboard/TimeSeriesChart'
 import { PlatformBreakdownChart } from '@/components/dashboard/PlatformBreakdownChart'
@@ -47,10 +47,7 @@ export default function CreatorDetailPage() {
   const router = useRouter()
   const creatorId = params.id as string
 
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: subDays(new Date(), 29),
-    to: new Date(),
-  })
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(getDefaultDateRange)
   const [granularity, setGranularity] = useState<Granularity>('daily')
 
   const [creator, setCreator] = useState<Creator | null>(null)

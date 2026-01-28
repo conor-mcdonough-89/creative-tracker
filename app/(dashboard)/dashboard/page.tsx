@@ -1,11 +1,11 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { subDays, format, startOfWeek, startOfMonth, parseISO } from 'date-fns'
+import { format, startOfWeek, startOfMonth, parseISO } from 'date-fns'
 import { DateRange } from 'react-day-picker'
 import { createClient } from '@/lib/supabase/client'
 import { MetricCard } from '@/components/dashboard/MetricCard'
-import { DateRangePicker } from '@/components/dashboard/DateRangePicker'
+import { DateRangePicker, getDefaultDateRange } from '@/components/dashboard/DateRangePicker'
 import { FilterBar } from '@/components/dashboard/FilterBar'
 import { GranularityToggle } from '@/components/dashboard/GranularityToggle'
 import { TimeSeriesChart } from '@/components/dashboard/TimeSeriesChart'
@@ -22,10 +22,7 @@ import {
 import type { Platform, Sport, Creator, AdPerformance, Granularity } from '@/lib/types'
 
 export default function DashboardPage() {
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: subDays(new Date(), 29),
-    to: new Date(),
-  })
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(getDefaultDateRange)
   const [granularity, setGranularity] = useState<Granularity>('daily')
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>([])
   const [selectedSports, setSelectedSports] = useState<string[]>([])

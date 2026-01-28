@@ -1,12 +1,12 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { subDays, format } from 'date-fns'
+import { format } from 'date-fns'
 import { DateRange } from 'react-day-picker'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { DateRangePicker } from '@/components/dashboard/DateRangePicker'
+import { DateRangePicker, getDefaultDateRange } from '@/components/dashboard/DateRangePicker'
 import { FilterBar } from '@/components/dashboard/FilterBar'
 import { CreatorTable } from '@/components/creators/CreatorTable'
 import { usePlatformAdjustments } from '@/hooks/usePlatformAdjustments'
@@ -15,10 +15,7 @@ import { Plus, Download } from 'lucide-react'
 import type { Platform, Sport, Creator, CreatorPattern, AdPerformance, CreatorWithPerformance } from '@/lib/types'
 
 export default function CreatorsPage() {
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: subDays(new Date(), 29),
-    to: new Date(),
-  })
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(getDefaultDateRange)
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>([])
   const [selectedSports, setSelectedSports] = useState<string[]>([])
 
