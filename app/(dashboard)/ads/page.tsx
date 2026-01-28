@@ -47,7 +47,7 @@ interface AggregatedAd {
 }
 
 export default function AdsPage() {
-  const [dateRange, setDateRange] = useState<DateRange | undefined>(getDefaultDateRange)
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => getDefaultDateRange())
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>([])
   const [selectedSports, setSelectedSports] = useState<string[]>([])
   const [selectedCreators, setSelectedCreators] = useState<string[]>([])

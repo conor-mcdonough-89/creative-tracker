@@ -15,7 +15,7 @@ import { Plus, Download } from 'lucide-react'
 import type { Platform, Sport, Creator, CreatorPattern, AdPerformance, CreatorWithPerformance } from '@/lib/types'
 
 export default function CreatorsPage() {
-  const [dateRange, setDateRange] = useState<DateRange | undefined>(getDefaultDateRange)
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => getDefaultDateRange())
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>([])
   const [selectedSports, setSelectedSports] = useState<string[]>([])
 

@@ -47,7 +47,7 @@ export default function CreatorDetailPage() {
   const router = useRouter()
   const creatorId = params.id as string
 
-  const [dateRange, setDateRange] = useState<DateRange | undefined>(getDefaultDateRange)
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => getDefaultDateRange())
   const [granularity, setGranularity] = useState<Granularity>('daily')
 
   const [creator, setCreator] = useState<Creator | null>(null)

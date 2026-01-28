@@ -22,7 +22,7 @@ import {
 import type { Platform, Sport, Creator, AdPerformance, Granularity } from '@/lib/types'
 
 export default function DashboardPage() {
-  const [dateRange, setDateRange] = useState<DateRange | undefined>(getDefaultDateRange)
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => getDefaultDateRange())
   const [granularity, setGranularity] = useState<Granularity>('daily')
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>([])
   const [selectedSports, setSelectedSports] = useState<string[]>([])
