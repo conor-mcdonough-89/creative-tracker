@@ -17,10 +17,11 @@ const PLATFORMS: { value: Platform; label: string }[] = [
 ]
 
 export default function AdjustmentsPage() {
+  // Store multiplier directly (0.5 = 50% of value, 1.3 = 130% of value)
   const [adjustments, setAdjustments] = useState<Record<Platform, number>>({
     meta: 0.50,
-    tiktok: 0,
-    google: 0,
+    tiktok: 1.0,
+    google: 1.0,
   })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -45,10 +46,11 @@ export default function AdjustmentsPage() {
       if (data && !error) {
         const loaded: Record<Platform, number> = {
           meta: 0.50,
-          tiktok: 0,
-          google: 0,
+          tiktok: 1.0,
+          google: 1.0,
         }
         for (const adj of data as PlatformAdjustment[]) {
+          // conversion_discount now stores the multiplier directly
           loaded[adj.platform] = adj.conversion_discount
         }
         setAdjustments(loaded)
@@ -61,8 +63,8 @@ export default function AdjustmentsPage() {
   }, [supabase])
 
   const handleChange = (platform: Platform, value: string) => {
-    const numValue = parseFloat(value) / 100 // Convert percentage to decimal
-    if (!isNaN(numValue) && numValue >= 0 && numValue <= 1) {
+    const numValue = parseFloat(value) / 100 // Convert percentage to decimal multiplier
+    if (!isNaN(numValue) && numValue >= 0) {
       setAdjustments((prev) => ({
         ...prev,
         [platform]: numValue,
@@ -79,13 +81,16 @@ export default function AdjustmentsPage() {
 
     try {
       for (const platform of PLATFORMS) {
+        // Use upsert to handle both insert and update cases
         const { error } = await supabase
           .from('platform_adjustments')
-          .update({
+          .upsert({
+            platform: platform.value,
             conversion_discount: adjustments[platform.value],
             updated_by: userEmail,
+          }, {
+            onConflict: 'platform',
           })
-          .eq('platform', platform.value)
 
         if (error) throw error
       }
@@ -116,7 +121,7 @@ export default function AdjustmentsPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Platform Adjustments</h1>
           <p className="text-muted-foreground">
-            Configure platform-specific conversion discounts
+            Configure platform-specific conversion adjustments
           </p>
         </div>
 
@@ -140,7 +145,7 @@ export default function AdjustmentsPage() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Platform Adjustments</h1>
         <p className="text-muted-foreground">
-          Configure platform-specific conversion discounts to account for over-reporting
+          Configure platform-specific conversion adjustments
         </p>
       </div>
 
@@ -164,10 +169,10 @@ export default function AdjustmentsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Conversion Discounts</CardTitle>
+          <CardTitle>Conversion Multipliers</CardTitle>
           <CardDescription>
-            Set a percentage discount for each platform&apos;s reported conversions and conversion value.
-            For example, a 50% discount means reported values will be multiplied by 0.5.
+            Set what percentage of each platform&apos;s reported conversions and conversion value to use.
+            For example: 50% means values are halved (under-counting), 130% means values are boosted by 30%.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -181,15 +186,15 @@ export default function AdjustmentsPage() {
                   id={platform.value}
                   type="number"
                   min="0"
-                  max="100"
+                  max="500"
                   step="1"
                   value={Math.round(adjustments[platform.value] * 100)}
                   onChange={(e) => handleChange(platform.value, e.target.value)}
                   className="w-24"
                 />
-                <span className="text-sm text-muted-foreground">% discount</span>
+                <span className="text-sm text-muted-foreground">% of reported</span>
                 <span className="ml-4 text-sm text-muted-foreground">
-                  (multiplier: {(1 - adjustments[platform.value]).toFixed(2)})
+                  (multiplier: {adjustments[platform.value].toFixed(2)})
                 </span>
               </div>
             </div>
@@ -211,17 +216,19 @@ export default function AdjustmentsPage() {
         <CardContent className="prose prose-sm dark:prose-invert">
           <ul className="space-y-2 text-sm text-muted-foreground">
             <li>
-              <strong>Conversion Discount:</strong> Reduces reported conversions and conversion value by the specified percentage.
+              <strong>100%:</strong> No adjustment - use reported values as-is.
             </li>
             <li>
-              <strong>Example:</strong> If Meta reports $10,000 in conversion value and you set a 50% discount,
-              the dashboard will show $5,000 as the adjusted value.
+              <strong>50%:</strong> Discount - if Meta reports $10,000, dashboard shows $5,000.
+            </li>
+            <li>
+              <strong>130%:</strong> Boost - if TikTok reports $10,000, dashboard shows $13,000.
             </li>
             <li>
               <strong>Affects:</strong> GMV, Revenue, Payouts, and ROAS calculations across all dashboards.
             </li>
             <li>
-              <strong>Raw Data:</strong> The original values are preserved in the database; discounts are applied only during display calculations.
+              <strong>Raw Data:</strong> The original values are preserved in the database; adjustments are applied only during display calculations.
             </li>
           </ul>
         </CardContent>

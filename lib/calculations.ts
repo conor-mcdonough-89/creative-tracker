@@ -5,28 +5,29 @@ export const PAYOUT_RATE = 0.10  // 10% of revenue goes to creator
 // Admin email for restricted settings
 export const ADMIN_EMAIL = 'conor@sidelineswap.com'
 
-// Default platform-specific conversion discounts (fallback if DB not loaded)
-export const DEFAULT_PLATFORM_DISCOUNTS: Record<string, number> = {
-  meta: 0.50, // Discount Meta conversions by 50%
-  tiktok: 0,
-  google: 0,
+// Default platform-specific conversion multipliers (fallback if DB not loaded)
+// 0.5 = 50% of reported value, 1.0 = no change, 1.3 = 130% of reported
+export const DEFAULT_PLATFORM_MULTIPLIERS: Record<string, number> = {
+  meta: 0.50, // Use 50% of Meta's reported conversions
+  tiktok: 1.0, // No adjustment
+  google: 1.0, // No adjustment
 }
 
-// Mutable store for platform discounts (loaded from DB)
-let platformDiscounts: Record<string, number> = { ...DEFAULT_PLATFORM_DISCOUNTS }
+// Mutable store for platform multipliers (loaded from DB)
+let platformMultipliers: Record<string, number> = { ...DEFAULT_PLATFORM_MULTIPLIERS }
 
 /**
- * Set platform discounts (called when loaded from database)
+ * Set platform multipliers (called when loaded from database)
  */
-export function setPlatformDiscounts(discounts: Record<string, number>) {
-  platformDiscounts = { ...DEFAULT_PLATFORM_DISCOUNTS, ...discounts }
+export function setPlatformDiscounts(multipliers: Record<string, number>) {
+  platformMultipliers = { ...DEFAULT_PLATFORM_MULTIPLIERS, ...multipliers }
 }
 
 /**
- * Get current platform discounts
+ * Get current platform multipliers
  */
 export function getPlatformDiscounts(): Record<string, number> {
-  return { ...platformDiscounts }
+  return { ...platformMultipliers }
 }
 
 /**
@@ -106,15 +107,16 @@ export function calculateMetrics(data: {
 }
 
 /**
- * Apply platform-specific discount to conversions
+ * Apply platform-specific multiplier to conversions
+ * Multiplier is stored directly: 0.5 = 50% of value, 1.0 = no change, 1.3 = 130%
  */
 export function applyConversionDiscount(
   conversions: number,
   conversionValue: number,
   platform?: string
 ): { conversions: number; conversion_value: number } {
-  const discount = platform ? (platformDiscounts[platform] ?? 0) : 0
-  const multiplier = 1 - discount
+  // Get multiplier directly (default to 1.0 = no change if not set)
+  const multiplier = platform ? (platformMultipliers[platform] ?? 1.0) : 1.0
   return {
     conversions: conversions * multiplier,
     conversion_value: conversionValue * multiplier,
@@ -123,7 +125,7 @@ export function applyConversionDiscount(
 
 /**
  * Aggregate multiple performance records
- * Applies platform-specific discounts to conversions (e.g., 50% discount for Meta)
+ * Applies platform-specific multipliers to conversions (e.g., 0.5 for Meta = 50% of reported)
  */
 export function aggregatePerformance(records: Array<{
   impressions: number
