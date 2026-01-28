@@ -20,12 +20,17 @@ insert into sports (name) values
   ('Soccer'), ('Golf'), ('Lacrosse'), ('Softball'), ('Tennis'), ('Other')
 on conflict (name) do nothing;
 
+-- Payout method enum
+create type payout_method_enum as enum ('venmo', 'gusto', 'sidelineswap', 'zelle');
+
 -- Creators table
 create table if not exists creators (
   id uuid primary key default uuid_generate_v4(),
   name text not null,
   handle text not null,
   social_links jsonb default '{}',
+  payout_method payout_method_enum,
+  payout_username text,
   notes text,
   created_at timestamp with time zone default now(),
   updated_at timestamp with time zone default now()

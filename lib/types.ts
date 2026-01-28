@@ -7,6 +7,9 @@ export type VideoPlatform = 'tiktok' | 'instagram' | 'youtube' | 'other'
 // Ad status for creator videos
 export type AdStatus = 'not_running' | 'running' | 'completed' | 'unknown'
 
+// Payout method for creators
+export type PayoutMethod = 'venmo' | 'gusto' | 'sidelineswap' | 'zelle'
+
 // Sports
 export interface Sport {
   id: string
@@ -34,6 +37,8 @@ export interface Creator {
     twitter?: string
     [key: string]: string | undefined
   }
+  payout_method: PayoutMethod | null
+  payout_username: string | null
   notes: string | null
   created_at: string
   updated_at: string

@@ -290,7 +290,7 @@ export default function CreatorDetailPage() {
       </div>
 
       {/* Profile Section */}
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Social Links</CardTitle>
@@ -313,6 +313,32 @@ export default function CreatorDetailPage() {
                 ))
             ) : (
               <p className="text-sm text-muted-foreground">No social links</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Payout Information</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {creator?.payout_method ? (
+              <>
+                <div>
+                  <p className="text-xs text-muted-foreground">Method</p>
+                  <p className="text-sm font-medium capitalize">
+                    {creator.payout_method === 'sidelineswap' ? 'SidelineSwap' : creator.payout_method}
+                  </p>
+                </div>
+                {creator.payout_username && (
+                  <div>
+                    <p className="text-xs text-muted-foreground">Username</p>
+                    <p className="text-sm font-medium">{creator.payout_username}</p>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">No payout method set</p>
             )}
           </CardContent>
         </Card>

@@ -8,9 +8,23 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { X, Plus, TestTube } from 'lucide-react'
-import type { Creator, CreatorPattern } from '@/lib/types'
+import type { Creator, CreatorPattern, PayoutMethod } from '@/lib/types'
+
+const PAYOUT_METHODS: { value: PayoutMethod; label: string }[] = [
+  { value: 'venmo', label: 'Venmo' },
+  { value: 'gusto', label: 'Gusto' },
+  { value: 'sidelineswap', label: 'SidelineSwap' },
+  { value: 'zelle', label: 'Zelle' },
+]
 
 interface CreatorFormProps {
   creator?: Creator & { patterns?: CreatorPattern[] }
@@ -27,6 +41,10 @@ export function CreatorForm({ creator, mode }: CreatorFormProps) {
   const [socialLinks, setSocialLinks] = useState<Record<string, string>>(
     (creator?.social_links as Record<string, string>) || {}
   )
+  const [payoutMethod, setPayoutMethod] = useState<PayoutMethod | null>(
+    creator?.payout_method || null
+  )
+  const [payoutUsername, setPayoutUsername] = useState(creator?.payout_username || '')
   const [notes, setNotes] = useState(creator?.notes || '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -89,6 +107,8 @@ export function CreatorForm({ creator, mode }: CreatorFormProps) {
             name,
             handle,
             social_links: socialLinks,
+            payout_method: payoutMethod,
+            payout_username: payoutUsername || null,
             notes: notes || null,
           })
           .select()
@@ -119,6 +139,8 @@ export function CreatorForm({ creator, mode }: CreatorFormProps) {
             name,
             handle,
             social_links: socialLinks,
+            payout_method: payoutMethod,
+            payout_username: payoutUsername || null,
             notes: notes || null,
           })
           .eq('id', creator.id)
@@ -287,6 +309,44 @@ export function CreatorForm({ creator, mode }: CreatorFormProps) {
               />
             </div>
           ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Payout Information</CardTitle>
+          <CardDescription>
+            How to pay this creator
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-2">
+            <Label htmlFor="payout_method">Payout Method</Label>
+            <Select
+              value={payoutMethod || ''}
+              onValueChange={(value) => setPayoutMethod(value as PayoutMethod)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select payout method..." />
+              </SelectTrigger>
+              <SelectContent>
+                {PAYOUT_METHODS.map((method) => (
+                  <SelectItem key={method.value} value={method.value}>
+                    {method.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="payout_username">Payout Username</Label>
+            <Input
+              id="payout_username"
+              value={payoutUsername}
+              onChange={(e) => setPayoutUsername(e.target.value)}
+              placeholder="@username or email"
+            />
+          </div>
         </CardContent>
       </Card>
 
