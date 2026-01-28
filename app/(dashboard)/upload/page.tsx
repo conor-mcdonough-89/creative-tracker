@@ -17,10 +17,20 @@ import {
 import { ColumnMapper } from '@/components/upload/ColumnMapper'
 import { PresetSelector } from '@/components/upload/PresetSelector'
 import { DataPreview } from '@/components/upload/DataPreview'
-import { Upload, FileText, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Upload, FileText, CheckCircle2, AlertCircle, AlertTriangle } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import type { Platform, ColumnPreset, CanonicalField, CSVRow } from '@/lib/types'
 
 type UploadStep = 'select-platform' | 'upload-file' | 'map-columns' | 'preview' | 'complete'
+
+interface UploadResult {
+  success: boolean
+  message: string
+  totalRecords: number
+  uniqueAds: number
+  matchedAds: number
+  unmatchedAds: string[]
+}
 
 export default function UploadPage() {
   const [step, setStep] = useState<UploadStep>('select-platform')
@@ -32,7 +42,7 @@ export default function UploadPage() {
   const [presets, setPresets] = useState<ColumnPreset[]>([])
   const [selectedPreset, setSelectedPreset] = useState<ColumnPreset | null>(null)
   const [uploading, setUploading] = useState(false)
-  const [uploadResult, setUploadResult] = useState<{ success: boolean; message: string; count?: number } | null>(null)
+  const [uploadResult, setUploadResult] = useState<UploadResult | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const supabase = createClient()
@@ -173,25 +183,51 @@ export default function UploadPage() {
       }).filter((record) => record.ad_name && record.date)
 
       // Upsert data
-      const { data, error: uploadError } = await supabase
+      const { error: uploadError } = await supabase
         .from('ad_performance')
         .upsert(records, {
           onConflict: 'ad_name,platform,date',
           ignoreDuplicates: false,
         })
-        .select()
 
       if (uploadError) {
         throw new Error(uploadError.message)
       }
 
-      // Count unique ads
-      const uniqueAds = new Set(records.map((r) => r.ad_name)).size
+      // Get unique ad names from uploaded data
+      const uniqueAdNames = [...new Set(records.map((r) => r.ad_name))]
+
+      // Check which ads match creator patterns
+      const { data: patterns } = await supabase
+        .from('creator_patterns')
+        .select('pattern')
+
+      const matchedAds: string[] = []
+      const unmatchedAds: string[] = []
+
+      if (patterns) {
+        for (const adName of uniqueAdNames) {
+          const hasMatch = patterns.some((p) =>
+            adName.toLowerCase().includes(p.pattern.toLowerCase())
+          )
+          if (hasMatch) {
+            matchedAds.push(adName)
+          } else {
+            unmatchedAds.push(adName)
+          }
+        }
+      } else {
+        // No patterns exist, all ads are unmatched
+        unmatchedAds.push(...uniqueAdNames)
+      }
 
       setUploadResult({
         success: true,
-        message: `Successfully imported ${records.length} records for ${uniqueAds} ads`,
-        count: records.length,
+        message: `Successfully imported ${records.length} records`,
+        totalRecords: records.length,
+        uniqueAds: uniqueAdNames.length,
+        matchedAds: matchedAds.length,
+        unmatchedAds: unmatchedAds,
       })
       setStep('complete')
     } catch (err) {
@@ -414,11 +450,73 @@ export default function UploadPage() {
               {uploadResult.message}
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-6">
+            {/* Summary stats */}
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="rounded-lg border p-4">
+                <div className="text-2xl font-bold">{uploadResult.uniqueAds}</div>
+                <div className="text-sm text-muted-foreground">Unique Ads</div>
+              </div>
+              <div className="rounded-lg border p-4 border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950">
+                <div className="text-2xl font-bold text-green-600 dark:text-green-400">{uploadResult.matchedAds}</div>
+                <div className="text-sm text-muted-foreground">Matched to Creators</div>
+              </div>
+              <div className="rounded-lg border p-4 border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950">
+                <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">{uploadResult.unmatchedAds.length}</div>
+                <div className="text-sm text-muted-foreground">Unassigned</div>
+              </div>
+            </div>
+
+            {/* Unmatched ads warning */}
+            {uploadResult.unmatchedAds.length > 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5" />
+                  <div className="flex-1">
+                    <h4 className="font-medium text-amber-800 dark:text-amber-200">
+                      {uploadResult.unmatchedAds.length} ads not matched to any creator
+                    </h4>
+                    <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                      These ads won&apos;t appear in dashboards until you create creator patterns for them.
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {uploadResult.unmatchedAds.slice(0, 10).map((adName) => (
+                        <Badge key={adName} variant="outline" className="text-xs bg-white dark:bg-amber-900">
+                          {adName.length > 40 ? adName.slice(0, 40) + '...' : adName}
+                        </Badge>
+                      ))}
+                      {uploadResult.unmatchedAds.length > 10 && (
+                        <Badge variant="outline" className="text-xs bg-white dark:bg-amber-900">
+                          +{uploadResult.unmatchedAds.length - 10} more
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Success message if all matched */}
+            {uploadResult.unmatchedAds.length === 0 && uploadResult.matchedAds > 0 && (
+              <div className="rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-900 dark:bg-green-950">
+                <div className="flex items-center gap-3">
+                  <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+                  <p className="text-sm text-green-700 dark:text-green-300">
+                    All ads matched to creators and will appear in dashboards.
+                  </p>
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-2">
               <Button onClick={resetUpload}>
                 Upload More Data
               </Button>
+              {uploadResult.unmatchedAds.length > 0 && (
+                <Button variant="outline" onClick={() => router.push('/creators/new')}>
+                  Create Creator Patterns
+                </Button>
+              )}
               <Button variant="outline" onClick={() => router.push('/dashboard')}>
                 Go to Dashboard
               </Button>

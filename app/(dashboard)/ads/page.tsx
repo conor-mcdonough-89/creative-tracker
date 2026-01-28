@@ -54,6 +54,7 @@ export default function AdsPage() {
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>([])
   const [selectedSports, setSelectedSports] = useState<string[]>([])
   const [selectedCreators, setSelectedCreators] = useState<string[]>([])
+  const [showUnassignedOnly, setShowUnassignedOnly] = useState(false)
   const [search, setSearch] = useState('')
   const [sortField, setSortField] = useState('conversion_value')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
@@ -176,7 +177,7 @@ export default function AdsPage() {
     })
   }, [performanceData, patterns, creators, sports])
 
-  // Filter by search and creators
+  // Filter by search, creators, and unassigned
   const filteredAds = useMemo(() => {
     let result = aggregatedAds
 
@@ -189,14 +190,21 @@ export default function AdsPage() {
       )
     }
 
-    if (selectedCreators.length > 0) {
+    if (showUnassignedOnly) {
+      result = result.filter((ad) => !ad.creator_id)
+    } else if (selectedCreators.length > 0) {
       result = result.filter(
         (ad) => ad.creator_id && selectedCreators.includes(ad.creator_id)
       )
     }
 
     return result
-  }, [aggregatedAds, search, selectedCreators])
+  }, [aggregatedAds, search, selectedCreators, showUnassignedOnly])
+
+  // Count unassigned ads
+  const unassignedCount = useMemo(() => {
+    return aggregatedAds.filter((ad) => !ad.creator_id).length
+  }, [aggregatedAds])
 
   // Sort ads
   const sortedAds = useMemo(() => {
@@ -329,6 +337,20 @@ export default function AdsPage() {
             selectedCreators={selectedCreators}
             onCreatorsChange={setSelectedCreators}
           />
+          {/* Unassigned filter */}
+          <Button
+            variant={showUnassignedOnly ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setShowUnassignedOnly(!showUnassignedOnly)}
+            className="gap-2"
+          >
+            Unassigned
+            {unassignedCount > 0 && (
+              <Badge variant={showUnassignedOnly ? 'secondary' : 'destructive'} className="ml-1">
+                {unassignedCount}
+              </Badge>
+            )}
+          </Button>
         </div>
         <DateRangePicker
           dateRange={dateRange}

@@ -51,16 +51,18 @@ export default function DashboardPage() {
     loadData()
   }, [supabase])
 
-  // Load performance data based on filters
+  // Load performance data based on filters - only matched ads (with creator)
   useEffect(() => {
     const loadPerformanceData = async () => {
       if (!dateRange?.from || !dateRange?.to) return
 
       setLoading(true)
 
+      // Query the view that includes creator matching, filter for matched ads only
       let query = supabase
-        .from('ad_performance')
+        .from('ads_with_creators')
         .select('*')
+        .not('creator_id', 'is', null) // Only include ads matched to a creator
         .gte('date', format(dateRange.from, 'yyyy-MM-dd'))
         .lte('date', format(dateRange.to, 'yyyy-MM-dd'))
 
@@ -72,6 +74,10 @@ export default function DashboardPage() {
         query = query.in('sport_id', selectedSports)
       }
 
+      if (selectedCreators.length > 0) {
+        query = query.in('creator_id', selectedCreators)
+      }
+
       const { data, error } = await query.order('date')
 
       if (data && !error) {
@@ -81,7 +87,7 @@ export default function DashboardPage() {
     }
 
     loadPerformanceData()
-  }, [supabase, dateRange, selectedPlatforms, selectedSports])
+  }, [supabase, dateRange, selectedPlatforms, selectedSports, selectedCreators])
 
   // Calculate aggregated metrics
   const metrics = useMemo(() => {
