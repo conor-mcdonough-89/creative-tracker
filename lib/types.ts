@@ -1,5 +1,11 @@
-// Platform enum
+// Platform enum (for ads)
 export type Platform = 'meta' | 'tiktok' | 'google'
+
+// Video platform enum (where videos are posted)
+export type VideoPlatform = 'tiktok' | 'instagram' | 'youtube' | 'other'
+
+// Ad status for creator videos
+export type AdStatus = 'not_running' | 'running' | 'completed' | 'unknown'
 
 // Sports
 export interface Sport {
@@ -31,6 +37,30 @@ export interface CreatorPattern {
   creator_id: string
   pattern: string
   created_at: string
+}
+
+// Creator video (raw video tracking)
+export interface CreatorVideo {
+  id: string
+  creator_id: string | null
+  sport_id: string | null
+  title: string | null
+  platform: VideoPlatform
+  posted_link: string | null
+  drive_link: string | null
+  platform_code: string | null
+  ad_status: AdStatus
+  ad_platforms: Platform[] | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+// Creator video with related data
+export interface CreatorVideoWithRelations extends CreatorVideo {
+  creator_name: string | null
+  creator_handle: string | null
+  sport_name: string | null
 }
 
 // Column mapping preset

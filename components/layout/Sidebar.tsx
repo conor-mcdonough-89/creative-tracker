@@ -12,6 +12,7 @@ import {
   FileText,
   Trophy,
   ChevronDown,
+  Video,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -25,6 +26,11 @@ const navigation = [
     name: 'Creators',
     href: '/creators',
     icon: Users,
+  },
+  {
+    name: 'Creator Videos',
+    href: '/videos',
+    icon: Video,
   },
   {
     name: 'Ad Creatives',

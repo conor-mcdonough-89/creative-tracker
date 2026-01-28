@@ -255,3 +255,69 @@ left join sports s on ap.sport_id = s.id;
 
 -- Grant access to the view
 grant select on ads_with_creators to authenticated;
+
+-- Video platform enum (social platforms where videos are posted)
+create type video_platform_enum as enum ('tiktok', 'instagram', 'youtube', 'other');
+
+-- Ad status enum for creator videos
+create type ad_status_enum as enum ('not_running', 'running', 'completed', 'unknown');
+
+-- Creator videos table (for tracking raw videos and their ad status)
+create table if not exists creator_videos (
+  id uuid primary key default uuid_generate_v4(),
+  creator_id uuid references creators(id) on delete cascade,
+  sport_id uuid references sports(id),
+  title text,
+  platform video_platform_enum not null default 'tiktok',
+  posted_link text,
+  drive_link text,
+  platform_code text, -- TikTok code, etc.
+  ad_status ad_status_enum not null default 'unknown',
+  ad_platforms platform_enum[], -- Which ad platforms it's running on (meta, tiktok, google)
+  notes text,
+  created_at timestamp with time zone default now(),
+  updated_at timestamp with time zone default now()
+);
+
+-- Indexes for creator_videos
+create index if not exists idx_creator_videos_creator on creator_videos(creator_id);
+create index if not exists idx_creator_videos_sport on creator_videos(sport_id);
+create index if not exists idx_creator_videos_status on creator_videos(ad_status);
+create index if not exists idx_creator_videos_platform on creator_videos(platform);
+
+-- Trigger for updated_at
+drop trigger if exists update_creator_videos_updated_at on creator_videos;
+create trigger update_creator_videos_updated_at
+  before update on creator_videos
+  for each row execute function update_updated_at_column();
+
+-- RLS for creator_videos
+alter table creator_videos enable row level security;
+
+drop policy if exists "Authenticated users can read all creator_videos" on creator_videos;
+drop policy if exists "Authenticated users can insert creator_videos" on creator_videos;
+drop policy if exists "Authenticated users can update creator_videos" on creator_videos;
+drop policy if exists "Authenticated users can delete creator_videos" on creator_videos;
+
+create policy "Authenticated users can read all creator_videos" on creator_videos
+  for select using (auth.role() = 'authenticated');
+
+create policy "Authenticated users can insert creator_videos" on creator_videos
+  for insert with check (auth.role() = 'authenticated');
+
+create policy "Authenticated users can update creator_videos" on creator_videos
+  for update using (auth.role() = 'authenticated');
+
+create policy "Authenticated users can delete creator_videos" on creator_videos
+  for delete using (auth.role() = 'authenticated');
+
+-- View for creator videos with relations
+create or replace view creator_videos_with_relations as
+select
+  cv.*,
+  c.name as creator_name,
+  c.handle as creator_handle,
+  s.name as sport_name
+from creator_videos cv
+left join creators c on cv.creator_id = c.id
+left join sports s on cv.sport_id = s.id;
