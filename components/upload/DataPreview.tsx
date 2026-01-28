@@ -20,6 +20,7 @@ interface DataPreviewProps {
 
 const FIELD_LABELS: Record<CanonicalField, string> = {
   ad_name: 'Ad Name',
+  campaign_name: 'Campaign',
   date: 'Date',
   impressions: 'Impr.',
   clicks: 'Clicks',

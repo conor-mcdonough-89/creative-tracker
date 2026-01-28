@@ -19,9 +19,26 @@ import { PresetSelector } from '@/components/upload/PresetSelector'
 import { DataPreview } from '@/components/upload/DataPreview'
 import { Upload, FileText, CheckCircle2, AlertCircle, AlertTriangle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import type { Platform, ColumnPreset, CanonicalField, CSVRow } from '@/lib/types'
+import type { Platform, ColumnPreset, CanonicalField, CSVRow, Sport } from '@/lib/types'
 
 type UploadStep = 'select-platform' | 'upload-file' | 'map-columns' | 'preview' | 'complete'
+
+/**
+ * Extract sport from ad name by matching against known sports
+ * Returns the sport_id if found, null otherwise
+ */
+function extractSportFromAdName(adName: string, sports: Sport[]): string | null {
+  const adNameLower = adName.toLowerCase()
+
+  for (const sport of sports) {
+    // Match sport name (case-insensitive)
+    if (adNameLower.includes(sport.name.toLowerCase())) {
+      return sport.id
+    }
+  }
+
+  return null
+}
 
 interface UploadResult {
   success: boolean
@@ -40,6 +57,7 @@ export default function UploadPage() {
   const [csvColumns, setCsvColumns] = useState<string[]>([])
   const [mappings, setMappings] = useState<Record<string, string>>({})
   const [presets, setPresets] = useState<ColumnPreset[]>([])
+  const [sports, setSports] = useState<Sport[]>([])
   const [selectedPreset, setSelectedPreset] = useState<ColumnPreset | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null)
@@ -48,19 +66,22 @@ export default function UploadPage() {
   const supabase = createClient()
   const router = useRouter()
 
-  // Load presets
+  // Load presets and sports
   useEffect(() => {
-    const loadPresets = async () => {
-      const { data, error } = await supabase
-        .from('column_presets')
-        .select('*')
-        .order('name')
+    const loadData = async () => {
+      const [presetsRes, sportsRes] = await Promise.all([
+        supabase.from('column_presets').select('*').order('name'),
+        supabase.from('sports').select('*').order('name'),
+      ])
 
-      if (data && !error) {
-        setPresets(data as ColumnPreset[])
+      if (presetsRes.data && !presetsRes.error) {
+        setPresets(presetsRes.data as ColumnPreset[])
+      }
+      if (sportsRes.data && !sportsRes.error) {
+        setSports(sportsRes.data as Sport[])
       }
     }
-    loadPresets()
+    loadData()
   }, [supabase])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -164,8 +185,13 @@ export default function UploadPage() {
           return value
         }
 
+        const adName = row[mappings.ad_name] || ''
+        const campaignName = mappings.campaign_name && mappings.campaign_name !== '__none__'
+          ? row[mappings.campaign_name] || ''
+          : ''
+
         return {
-          ad_name: row[mappings.ad_name] || '',
+          ad_name: adName,
           platform,
           date: parseDate(row[mappings.date] || ''),
           impressions: Math.round(parseNumber(row[mappings.impressions])),
@@ -179,6 +205,8 @@ export default function UploadPage() {
           creative_url: mappings.creative_url && mappings.creative_url !== '__none__'
             ? row[mappings.creative_url] || null
             : null,
+          // Extract sport from campaign name first, fall back to ad name
+          sport_id: extractSportFromAdName(campaignName, sports) || extractSportFromAdName(adName, sports),
         }
       }).filter((record) => record.ad_name && record.date)
 

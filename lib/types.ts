@@ -197,6 +197,7 @@ export interface CSVRow {
 // Canonical fields for mapping
 export const CANONICAL_FIELDS = [
   'ad_name',
+  'campaign_name',
   'date',
   'impressions',
   'clicks',

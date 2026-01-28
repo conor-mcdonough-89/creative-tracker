@@ -20,6 +20,7 @@ interface ColumnMapperProps {
 
 const FIELD_DESCRIPTIONS: Record<CanonicalField, { label: string; required: boolean; description: string }> = {
   ad_name: { label: 'Ad Name', required: true, description: 'Creative/ad name identifier' },
+  campaign_name: { label: 'Campaign Name', required: false, description: 'Campaign name (used to detect sport)' },
   date: { label: 'Date', required: true, description: 'Performance date (YYYY-MM-DD)' },
   impressions: { label: 'Impressions', required: true, description: 'Total impressions' },
   clicks: { label: 'Clicks', required: true, description: 'Total clicks' },
@@ -36,7 +37,8 @@ export function ColumnMapper({ csvColumns, mappings, onMappingChange }: ColumnMa
   // Try to auto-detect mappings based on common column names
   const suggestMapping = (canonicalField: CanonicalField): string | undefined => {
     const patterns: Record<CanonicalField, RegExp[]> = {
-      ad_name: [/ad.?name/i, /creative.?name/i, /campaign.?name/i, /^name$/i],
+      ad_name: [/ad.?name/i, /creative.?name/i, /^name$/i],
+      campaign_name: [/campaign.?name/i, /campaign$/i],
       date: [/^date$/i, /day$/i, /report.?date/i],
       impressions: [/impressions?$/i, /imps?$/i],
       clicks: [/clicks?$/i, /link.?clicks?/i],
