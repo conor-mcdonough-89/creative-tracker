@@ -2,6 +2,13 @@
 export const REVENUE_RATE = 0.115 // 11.5% of GMV (conversion_value) is revenue
 export const PAYOUT_RATE = 0.10  // 10% of revenue goes to creator
 
+// Platform-specific conversion discounts (to account for over-reporting)
+export const PLATFORM_CONVERSION_DISCOUNTS: Record<string, number> = {
+  meta: 0.50, // Discount Meta conversions by 50%
+  tiktok: 0,
+  google: 0,
+}
+
 /**
  * Calculate payout for a given conversion value (GMV)
  */
@@ -79,7 +86,24 @@ export function calculateMetrics(data: {
 }
 
 /**
+ * Apply platform-specific discount to conversions
+ */
+export function applyConversionDiscount(
+  conversions: number,
+  conversionValue: number,
+  platform?: string
+): { conversions: number; conversion_value: number } {
+  const discount = platform ? (PLATFORM_CONVERSION_DISCOUNTS[platform] ?? 0) : 0
+  const multiplier = 1 - discount
+  return {
+    conversions: conversions * multiplier,
+    conversion_value: conversionValue * multiplier,
+  }
+}
+
+/**
  * Aggregate multiple performance records
+ * Applies platform-specific discounts to conversions (e.g., 50% discount for Meta)
  */
 export function aggregatePerformance(records: Array<{
   impressions: number
@@ -88,6 +112,7 @@ export function aggregatePerformance(records: Array<{
   conversions: number
   conversion_value: number
   video_views?: number | null
+  platform?: string
 }>) {
   type Totals = {
     impressions: number
@@ -108,14 +133,23 @@ export function aggregatePerformance(records: Array<{
   }
 
   const totals = records.reduce<Totals>(
-    (acc, record) => ({
-      impressions: acc.impressions + record.impressions,
-      clicks: acc.clicks + record.clicks,
-      spend: acc.spend + record.spend,
-      conversions: acc.conversions + record.conversions,
-      conversion_value: acc.conversion_value + record.conversion_value,
-      video_views: acc.video_views + (record.video_views ?? 0),
-    }),
+    (acc, record) => {
+      // Apply platform-specific discount to conversions
+      const { conversions, conversion_value } = applyConversionDiscount(
+        record.conversions,
+        record.conversion_value,
+        record.platform
+      )
+
+      return {
+        impressions: acc.impressions + record.impressions,
+        clicks: acc.clicks + record.clicks,
+        spend: acc.spend + record.spend,
+        conversions: acc.conversions + conversions,
+        conversion_value: acc.conversion_value + conversion_value,
+        video_views: acc.video_views + (record.video_views ?? 0),
+      }
+    },
     initialValue
   )
 
