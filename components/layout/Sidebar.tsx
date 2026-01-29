@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import {
   LayoutDashboard,
   Users,
+  Handshake,
   Film,
   Upload,
   Settings,
@@ -27,6 +28,11 @@ const navigation = [
     name: 'Creators',
     href: '/creators',
     icon: Users,
+  },
+  {
+    name: 'Partners',
+    href: '/partners',
+    icon: Handshake,
   },
   {
     name: 'Creator Videos',

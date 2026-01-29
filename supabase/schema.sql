@@ -366,3 +366,109 @@ create policy "Authenticated users can read platform_adjustments" on platform_ad
 drop policy if exists "Authenticated users can update platform_adjustments" on platform_adjustments;
 create policy "Authenticated users can update platform_adjustments" on platform_adjustments
   for update using (auth.role() = 'authenticated');
+
+-- Partner rate type enum
+create type partner_rate_type_enum as enum ('per_video', 'per_month');
+
+-- Partners table (Creators with fixed rate contracts)
+create table if not exists partners (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null,
+  handle text not null,
+  social_links jsonb default '{}',
+  payout_method payout_method_enum,
+  payout_username text,
+  rate numeric(12,2) not null default 0,
+  rate_type partner_rate_type_enum not null default 'per_video',
+  contract_start_date date,
+  contract_end_date date,
+  contact_info text,
+  notes text,
+  converted_from_creator_id uuid references creators(id) on delete set null,
+  created_at timestamp with time zone default now(),
+  updated_at timestamp with time zone default now()
+);
+
+-- Partner patterns (for ad matching, same as creators)
+create table if not exists partner_patterns (
+  id uuid primary key default uuid_generate_v4(),
+  partner_id uuid references partners(id) on delete cascade,
+  pattern text not null,
+  created_at timestamp with time zone default now()
+);
+
+-- Indexes for partners
+create index if not exists idx_partners_contract_dates on partners(contract_start_date, contract_end_date);
+create index if not exists idx_partner_patterns_pattern on partner_patterns(pattern);
+create index if not exists idx_partner_patterns_partner on partner_patterns(partner_id);
+
+-- Trigger for updated_at on partners
+drop trigger if exists update_partners_updated_at on partners;
+create trigger update_partners_updated_at
+  before update on partners
+  for each row execute function update_updated_at_column();
+
+-- RLS for partners
+alter table partners enable row level security;
+alter table partner_patterns enable row level security;
+
+-- Policies for partners
+drop policy if exists "Authenticated users can read all partners" on partners;
+drop policy if exists "Authenticated users can insert partners" on partners;
+drop policy if exists "Authenticated users can update partners" on partners;
+drop policy if exists "Authenticated users can delete partners" on partners;
+
+create policy "Authenticated users can read all partners" on partners
+  for select using (auth.role() = 'authenticated');
+
+create policy "Authenticated users can insert partners" on partners
+  for insert with check (auth.role() = 'authenticated');
+
+create policy "Authenticated users can update partners" on partners
+  for update using (auth.role() = 'authenticated');
+
+create policy "Authenticated users can delete partners" on partners
+  for delete using (auth.role() = 'authenticated');
+
+-- Policies for partner_patterns
+drop policy if exists "Authenticated users can read all partner_patterns" on partner_patterns;
+drop policy if exists "Authenticated users can insert partner_patterns" on partner_patterns;
+drop policy if exists "Authenticated users can update partner_patterns" on partner_patterns;
+drop policy if exists "Authenticated users can delete partner_patterns" on partner_patterns;
+
+create policy "Authenticated users can read all partner_patterns" on partner_patterns
+  for select using (auth.role() = 'authenticated');
+
+create policy "Authenticated users can insert partner_patterns" on partner_patterns
+  for insert with check (auth.role() = 'authenticated');
+
+create policy "Authenticated users can update partner_patterns" on partner_patterns
+  for update using (auth.role() = 'authenticated');
+
+create policy "Authenticated users can delete partner_patterns" on partner_patterns
+  for delete using (auth.role() = 'authenticated');
+
+-- View for ads with partner matching (similar to ads_with_creators)
+create or replace view ads_with_partners as
+select
+  ap.*,
+  p.partner_id,
+  p.partner_name,
+  p.partner_handle,
+  s.name as sport_name,
+  COALESCE(pa.conversion_discount, 1.0) as platform_multiplier,
+  ap.conversions * COALESCE(pa.conversion_discount, 1.0) as adjusted_conversions,
+  ap.conversion_value * COALESCE(pa.conversion_discount, 1.0) as adjusted_conversion_value
+from ad_performance ap
+left join lateral (
+  select pp.partner_id, pr.name as partner_name, pr.handle as partner_handle
+  from partner_patterns pp
+  join partners pr on pp.partner_id = pr.id
+  where ap.ad_name ilike '%' || pp.pattern || '%'
+  limit 1
+) p on true
+left join sports s on ap.sport_id = s.id
+left join platform_adjustments pa on ap.platform = pa.platform;
+
+-- Grant access to the partners view
+grant select on ads_with_partners to authenticated;
