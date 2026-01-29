@@ -125,7 +125,8 @@ export function applyConversionDiscount(
 
 /**
  * Aggregate multiple performance records
- * Applies platform-specific multipliers to conversions (e.g., 0.5 for Meta = 50% of reported)
+ * Uses pre-adjusted values from database if available (adjusted_conversions, adjusted_conversion_value)
+ * Otherwise applies platform-specific multipliers (e.g., 0.5 for Meta = 50% of reported)
  */
 export function aggregatePerformance(records: Array<{
   impressions: number
@@ -135,6 +136,9 @@ export function aggregatePerformance(records: Array<{
   conversion_value: number
   video_views?: number | null
   platform?: string
+  // Pre-adjusted values from database view
+  adjusted_conversions?: number
+  adjusted_conversion_value?: number
 }>) {
   type Totals = {
     impressions: number
@@ -156,12 +160,24 @@ export function aggregatePerformance(records: Array<{
 
   const totals = records.reduce<Totals>(
     (acc, record) => {
-      // Apply platform-specific discount to conversions
-      const { conversions, conversion_value } = applyConversionDiscount(
-        record.conversions,
-        record.conversion_value,
-        record.platform
-      )
+      // Use pre-adjusted values from DB if available, otherwise apply adjustments
+      let conversions: number
+      let conversion_value: number
+
+      if (record.adjusted_conversions !== undefined && record.adjusted_conversion_value !== undefined) {
+        // Use pre-adjusted values from database
+        conversions = record.adjusted_conversions
+        conversion_value = record.adjusted_conversion_value
+      } else {
+        // Fall back to applying adjustments client-side
+        const adjusted = applyConversionDiscount(
+          record.conversions,
+          record.conversion_value,
+          record.platform
+        )
+        conversions = adjusted.conversions
+        conversion_value = adjusted.conversion_value
+      }
 
       return {
         impressions: acc.impressions + record.impressions,

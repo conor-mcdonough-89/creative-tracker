@@ -241,13 +241,17 @@ create trigger on_auth_user_created
   for each row execute procedure public.handle_new_user();
 
 -- View for ads with creator matching (using pattern matching)
+-- Includes platform-adjusted conversion values
 create or replace view ads_with_creators as
 select
   ap.*,
   c.creator_id,
   c.creator_name,
   c.creator_handle,
-  s.name as sport_name
+  s.name as sport_name,
+  COALESCE(pa.conversion_discount, 1.0) as platform_multiplier,
+  ap.conversions * COALESCE(pa.conversion_discount, 1.0) as adjusted_conversions,
+  ap.conversion_value * COALESCE(pa.conversion_discount, 1.0) as adjusted_conversion_value
 from ad_performance ap
 left join lateral (
   select cp.creator_id, cr.name as creator_name, cr.handle as creator_handle
@@ -256,7 +260,8 @@ left join lateral (
   where ap.ad_name ilike '%' || cp.pattern || '%'
   limit 1
 ) c on true
-left join sports s on ap.sport_id = s.id;
+left join sports s on ap.sport_id = s.id
+left join platform_adjustments pa on ap.platform = pa.platform;
 
 -- Grant access to the view
 grant select on ads_with_creators to authenticated;
@@ -336,10 +341,11 @@ create table if not exists platform_adjustments (
 );
 
 -- Seed default platform adjustments
+-- conversion_discount is a multiplier: 0.50 = 50% of reported, 1.0 = no change
 insert into platform_adjustments (platform, conversion_discount) values
   ('meta', 0.50),
-  ('tiktok', 0),
-  ('google', 0)
+  ('tiktok', 1.0),
+  ('google', 1.0)
 on conflict (platform) do nothing;
 
 -- Trigger for updated_at

@@ -156,11 +156,16 @@ export interface CreatorWithPerformance extends Creator {
   matched_ads_count: number
 }
 
-// Ad with creator and sport info
+// Ad with creator and sport info (from ads_with_creators view)
 export interface AdWithRelations extends AdPerformance {
   creator_id?: string | null
   creator_name?: string | null
+  creator_handle?: string | null
   sport_name?: string | null
+  // Platform-adjusted values (from view)
+  platform_multiplier?: number
+  adjusted_conversions?: number
+  adjusted_conversion_value?: number
 }
 
 // Filter types

@@ -17,10 +17,9 @@ import {
   formatPercentage,
   formatCompactNumber,
   aggregatePerformance,
-  applyConversionDiscount,
   REVENUE_RATE,
 } from '@/lib/calculations'
-import type { Platform, Sport, Creator, AdPerformance, Granularity } from '@/lib/types'
+import type { Platform, Sport, Creator, AdWithRelations, Granularity } from '@/lib/types'
 
 export default function DashboardPage() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => getDefaultDateRange())
@@ -31,7 +30,7 @@ export default function DashboardPage() {
 
   const [sports, setSports] = useState<Sport[]>([])
   const [creators, setCreators] = useState<Creator[]>([])
-  const [performanceData, setPerformanceData] = useState<AdPerformance[]>([])
+  const [performanceData, setPerformanceData] = useState<AdWithRelations[]>([])
   const [loading, setLoading] = useState(true)
 
   const supabase = createClient()
@@ -83,7 +82,7 @@ export default function DashboardPage() {
       const { data, error } = await query.order('date')
 
       if (data && !error) {
-        setPerformanceData(data as AdPerformance[])
+        setPerformanceData(data as AdWithRelations[])
       }
       setLoading(false)
     }
@@ -135,14 +134,9 @@ export default function DashboardPage() {
       if (!acc[key]) {
         acc[key] = { spend: 0, conversion_value: 0, impressions: 0 }
       }
-      // Apply platform adjustments to conversion value
-      const { conversion_value: adjustedConversionValue } = applyConversionDiscount(
-        record.conversions,
-        record.conversion_value,
-        record.platform
-      )
+      // Use pre-adjusted conversion value from database
       acc[key].spend += record.spend
-      acc[key].conversion_value += adjustedConversionValue
+      acc[key].conversion_value += record.adjusted_conversion_value ?? record.conversion_value
       acc[key].impressions += record.impressions
       return acc
     }, {} as Record<string, { spend: number; conversion_value: number; impressions: number }>)
@@ -171,15 +165,10 @@ export default function DashboardPage() {
       if (!acc[record.platform]) {
         acc[record.platform] = { spend: 0, conversions: 0, conversion_value: 0 }
       }
-      // Apply platform adjustments to conversions
-      const { conversions: adjustedConversions, conversion_value: adjustedConversionValue } = applyConversionDiscount(
-        record.conversions,
-        record.conversion_value,
-        record.platform
-      )
+      // Use pre-adjusted values from database
       acc[record.platform].spend += record.spend
-      acc[record.platform].conversions += adjustedConversions
-      acc[record.platform].conversion_value += adjustedConversionValue
+      acc[record.platform].conversions += record.adjusted_conversions ?? record.conversions
+      acc[record.platform].conversion_value += record.adjusted_conversion_value ?? record.conversion_value
       return acc
     }, {} as Record<Platform, { spend: number; conversions: number; conversion_value: number }>)
 
@@ -202,13 +191,8 @@ export default function DashboardPage() {
       if (!acc[sportId]) {
         acc[sportId] = 0
       }
-      // Apply platform adjustments to conversion value
-      const { conversion_value: adjustedConversionValue } = applyConversionDiscount(
-        record.conversions,
-        record.conversion_value,
-        record.platform
-      )
-      acc[sportId] += adjustedConversionValue
+      // Use pre-adjusted conversion value from database
+      acc[sportId] += record.adjusted_conversion_value ?? record.conversion_value
       return acc
     }, {} as Record<string, number>)
 
