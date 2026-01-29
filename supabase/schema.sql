@@ -473,3 +473,73 @@ left join platform_adjustments pa on ap.platform = pa.platform;
 
 -- Grant access to the partners view
 grant select on ads_with_partners to authenticated;
+
+-- Payout status enum
+create type payout_status_enum as enum ('paid', 'unpaid');
+
+-- Payouts table (invoice-like records for creator payouts)
+create table if not exists payouts (
+  id uuid primary key default uuid_generate_v4(),
+  creator_id uuid references creators(id) on delete cascade not null,
+  payout_method payout_method_enum,
+  payout_username text,
+  date_start date not null,
+  date_end date not null,
+  amount numeric(12,2) not null,
+  status payout_status_enum not null default 'unpaid',
+  paid_at timestamp with time zone,
+  created_at timestamp with time zone default now(),
+  updated_at timestamp with time zone default now()
+);
+
+-- Index for payouts
+create index if not exists idx_payouts_creator on payouts(creator_id);
+create index if not exists idx_payouts_status on payouts(status);
+create index if not exists idx_payouts_dates on payouts(date_start, date_end);
+create index if not exists idx_payouts_paid_at on payouts(paid_at);
+
+-- Trigger for updated_at on payouts
+drop trigger if exists update_payouts_updated_at on payouts;
+create trigger update_payouts_updated_at
+  before update on payouts
+  for each row execute function update_updated_at_column();
+
+-- RLS for payouts
+alter table payouts enable row level security;
+
+-- Policies for payouts
+drop policy if exists "Authenticated users can read all payouts" on payouts;
+drop policy if exists "Authenticated users can insert payouts" on payouts;
+drop policy if exists "Authenticated users can update payouts" on payouts;
+drop policy if exists "Authenticated users can delete payouts" on payouts;
+
+create policy "Authenticated users can read all payouts" on payouts
+  for select using (auth.role() = 'authenticated');
+
+create policy "Authenticated users can insert payouts" on payouts
+  for insert with check (auth.role() = 'authenticated');
+
+create policy "Authenticated users can update payouts" on payouts
+  for update using (auth.role() = 'authenticated');
+
+-- Only admin can delete payouts (enforced at app level)
+create policy "Authenticated users can delete payouts" on payouts
+  for delete using (auth.role() = 'authenticated');
+
+-- Function to check for overlapping payout date ranges
+create or replace function check_payout_overlap(
+  p_creator_id uuid,
+  p_date_start date,
+  p_date_end date,
+  p_exclude_id uuid default null
+) returns boolean as $$
+begin
+  return exists (
+    select 1 from payouts
+    where creator_id = p_creator_id
+      and (p_exclude_id is null or id != p_exclude_id)
+      and date_start <= p_date_end
+      and date_end >= p_date_start
+  );
+end;
+$$ language plpgsql;

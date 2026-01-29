@@ -16,6 +16,30 @@ export type PartnerRateType = 'per_video' | 'per_month'
 // Partner status (computed based on contract dates)
 export type PartnerStatus = 'prospect' | 'active' | 'ended'
 
+// Payout status
+export type PayoutStatus = 'paid' | 'unpaid'
+
+// Payout (invoice-like record for creator payouts)
+export interface Payout {
+  id: string
+  creator_id: string
+  payout_method: PayoutMethod | null
+  payout_username: string | null
+  date_start: string
+  date_end: string
+  amount: number
+  status: PayoutStatus
+  paid_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+// Payout with creator info
+export interface PayoutWithCreator extends Payout {
+  creator_name: string
+  creator_handle: string
+}
+
 // Sports
 export interface Sport {
   id: string
