@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Users,
   Handshake,
+  Receipt,
   Film,
   Upload,
   Settings,
@@ -33,6 +34,11 @@ const navigation = [
     name: 'Partners',
     href: '/partners',
     icon: Handshake,
+  },
+  {
+    name: 'Payouts',
+    href: '/payouts',
+    icon: Receipt,
   },
   {
     name: 'Creator Videos',
