@@ -270,6 +270,53 @@ export default function DashboardPage() {
     }
   }, [partners, videos, dateRange])
 
+  // Calculate creator payouts based on performance data
+  const creatorPayouts = useMemo(() => {
+    // Group performance by creator
+    const creatorPerformance = performanceData.reduce((acc, record) => {
+      if (!record.creator_id) return acc
+
+      if (!acc[record.creator_id]) {
+        acc[record.creator_id] = {
+          gmv: 0,
+          spend: 0,
+        }
+      }
+      // Use adjusted conversion value if available
+      acc[record.creator_id].gmv += record.adjusted_conversion_value ?? record.conversion_value
+      acc[record.creator_id].spend += record.spend
+      return acc
+    }, {} as Record<string, { gmv: number; spend: number }>)
+
+    // Calculate payouts for each creator
+    const creatorData = creators
+      .map((creator) => {
+        const perf = creatorPerformance[creator.id]
+        if (!perf || perf.gmv === 0) return null
+
+        const revenue = perf.gmv * REVENUE_RATE
+        const payout = revenue * 0.10 // 10% of revenue
+
+        return {
+          id: creator.id,
+          name: creator.name,
+          handle: creator.handle,
+          gmv: perf.gmv,
+          payout,
+        }
+      })
+      .filter((c): c is NonNullable<typeof c> => c !== null)
+      .sort((a, b) => b.payout - a.payout)
+
+    const totalPayout = creatorData.reduce((sum, c) => sum + c.payout, 0)
+
+    return {
+      creators: creatorData,
+      total: totalPayout,
+      count: creatorData.length,
+    }
+  }, [creators, performanceData])
+
   return (
     <div className="space-y-6">
       <div>
@@ -465,6 +512,70 @@ export default function DashboardPage() {
                   )}
                   {partnerPayouts.partners.length === 0 && (
                     <p className="text-sm text-muted-foreground">No active partners</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
+
+      {/* Creator Payouts Section */}
+      {creatorPayouts.count > 0 && (
+        <>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Creator Payouts</h2>
+            <Link href="/creators" className="text-sm text-primary hover:underline">
+              View all creators
+            </Link>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card className="bg-green-50 dark:bg-green-950/20">
+              <CardHeader>
+                <CardTitle className="text-base">Total Creator Payouts</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-green-600">
+                  {formatCurrency(creatorPayouts.total)}
+                </div>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {creatorPayouts.count} creator{creatorPayouts.count !== 1 ? 's' : ''} with performance
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Creator Breakdown</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {creatorPayouts.creators.slice(0, 5).map((creator) => (
+                    <div key={creator.id} className="flex items-center justify-between">
+                      <div>
+                        <Link
+                          href={`/creators/${creator.id}`}
+                          className="font-medium hover:underline"
+                        >
+                          {creator.name}
+                        </Link>
+                        <p className="text-xs text-muted-foreground">
+                          {formatCurrency(creator.gmv)} GMV
+                        </p>
+                      </div>
+                      <span className="font-medium text-green-600">
+                        {formatCurrency(creator.payout)}
+                      </span>
+                    </div>
+                  ))}
+                  {creatorPayouts.creators.length > 5 && (
+                    <Link
+                      href="/creators"
+                      className="block text-sm text-primary hover:underline"
+                    >
+                      +{creatorPayouts.creators.length - 5} more
+                    </Link>
                   )}
                 </div>
               </CardContent>

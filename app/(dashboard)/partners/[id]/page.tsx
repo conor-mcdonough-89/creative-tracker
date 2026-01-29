@@ -361,10 +361,24 @@ export default function PartnerDetailPage() {
           <CardHeader>
             <CardTitle className="text-base">Contact Info</CardTitle>
           </CardHeader>
-          <CardContent>
-            {partner?.contact_info ? (
-              <p className="text-sm whitespace-pre-line">{partner.contact_info}</p>
-            ) : (
+          <CardContent className="space-y-2">
+            {partner?.email && (
+              <div>
+                <p className="text-xs text-muted-foreground">Email</p>
+                <a href={`mailto:${partner.email}`} className="text-sm text-primary hover:underline">
+                  {partner.email}
+                </a>
+              </div>
+            )}
+            {partner?.phone_number && (
+              <div>
+                <p className="text-xs text-muted-foreground">Phone</p>
+                <a href={`tel:${partner.phone_number}`} className="text-sm text-primary hover:underline">
+                  {partner.phone_number}
+                </a>
+              </div>
+            )}
+            {!partner?.email && !partner?.phone_number && (
               <p className="text-sm text-muted-foreground">No contact info</p>
             )}
           </CardContent>

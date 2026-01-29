@@ -76,7 +76,8 @@ export interface Partner {
   rate_type: PartnerRateType
   contract_start_date: string | null
   contract_end_date: string | null
-  contact_info: string | null
+  email: string | null
+  phone_number: string | null
   notes: string | null
   converted_from_creator_id: string | null
   created_at: string

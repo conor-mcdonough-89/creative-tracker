@@ -71,7 +71,8 @@ export function PartnerForm({ partner, mode, initialData }: PartnerFormProps) {
   const [contractEndDate, setContractEndDate] = useState(
     partner?.contract_end_date || ''
   )
-  const [contactInfo, setContactInfo] = useState(partner?.contact_info || '')
+  const [email, setEmail] = useState(partner?.email || '')
+  const [phoneNumber, setPhoneNumber] = useState(partner?.phone_number || '')
   const [notes, setNotes] = useState(partner?.notes || initialData?.notes || '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -142,7 +143,8 @@ export function PartnerForm({ partner, mode, initialData }: PartnerFormProps) {
             rate_type: rateType,
             contract_start_date: contractStartDate || null,
             contract_end_date: contractEndDate || null,
-            contact_info: contactInfo || null,
+            email: email || null,
+            phone_number: phoneNumber || null,
             notes: notes || null,
           })
           .select()
@@ -179,7 +181,8 @@ export function PartnerForm({ partner, mode, initialData }: PartnerFormProps) {
             rate_type: rateType,
             contract_start_date: contractStartDate || null,
             contract_end_date: contractEndDate || null,
-            contact_info: contactInfo || null,
+            email: email || null,
+            phone_number: phoneNumber || null,
             notes: notes || null,
           })
           .eq('id', partner.id)
@@ -395,16 +398,30 @@ export function PartnerForm({ partner, mode, initialData }: PartnerFormProps) {
         <CardHeader>
           <CardTitle>Contact Information</CardTitle>
           <CardDescription>
-            How to reach this partner (email, phone, address, etc.)
+            How to reach this partner
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <Textarea
-            value={contactInfo}
-            onChange={(e) => setContactInfo(e.target.value)}
-            placeholder="Email: partner@example.com&#10;Phone: (555) 123-4567"
-            rows={3}
-          />
+        <CardContent className="space-y-4">
+          <div className="grid gap-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="partner@example.com"
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="phone_number">Phone Number</Label>
+            <Input
+              id="phone_number"
+              type="tel"
+              value={phoneNumber}
+              onChange={(e) => setPhoneNumber(e.target.value)}
+              placeholder="(555) 123-4567"
+            />
+          </div>
         </CardContent>
       </Card>
 
