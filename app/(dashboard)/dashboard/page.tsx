@@ -114,7 +114,7 @@ export default function DashboardPage() {
 
   // Prepare time series data
   const timeSeriesData = useMemo(() => {
-    if (performanceData.length === 0) return { spend: [], conversionValue: [], roas: [] }
+    if (performanceData.length === 0) return { spend: [], conversionValue: [], roas: [], clicks: [] }
 
     // Group by date/week/month based on granularity
     const groupKey = (date: string): string => {
@@ -132,14 +132,15 @@ export default function DashboardPage() {
     const grouped = performanceData.reduce((acc, record) => {
       const key = groupKey(record.date)
       if (!acc[key]) {
-        acc[key] = { spend: 0, conversion_value: 0, impressions: 0 }
+        acc[key] = { spend: 0, conversion_value: 0, impressions: 0, clicks: 0 }
       }
       // Use pre-adjusted conversion value from database
       acc[key].spend += record.spend
       acc[key].conversion_value += record.adjusted_conversion_value ?? record.conversion_value
       acc[key].impressions += record.impressions
+      acc[key].clicks += record.clicks
       return acc
-    }, {} as Record<string, { spend: number; conversion_value: number; impressions: number }>)
+    }, {} as Record<string, { spend: number; conversion_value: number; impressions: number; clicks: number }>)
 
     const sortedKeys = Object.keys(grouped).sort()
 
@@ -155,6 +156,10 @@ export default function DashboardPage() {
       roas: sortedKeys.map((date) => ({
         date: granularity === 'monthly' ? format(parseISO(date + '-01'), 'MMM yyyy') : format(parseISO(date), 'MMM d'),
         value: grouped[date].spend > 0 ? grouped[date].conversion_value / grouped[date].spend : 0,
+      })),
+      clicks: sortedKeys.map((date) => ({
+        date: granularity === 'monthly' ? format(parseISO(date + '-01'), 'MMM yyyy') : format(parseISO(date), 'MMM d'),
+        value: grouped[date].clicks,
       })),
     }
   }, [performanceData, granularity])
@@ -314,6 +319,13 @@ export default function DashboardPage() {
           data={timeSeriesData.roas}
           formatValue="number"
           color="var(--chart-3)"
+          loading={loading}
+        />
+        <TimeSeriesChart
+          title="Total Clicks"
+          data={timeSeriesData.clicks}
+          formatValue="number"
+          color="var(--chart-4)"
           loading={loading}
         />
       </div>
