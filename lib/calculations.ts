@@ -230,3 +230,72 @@ export function formatCompactNumber(value: number): string {
 export function formatNumber(value: number): string {
   return new Intl.NumberFormat('en-US').format(value)
 }
+
+/**
+ * Calculate partner status based on contract dates
+ * - Prospect: No contract start or end date
+ * - Active: Contract is current (has start date, end date not passed or no end date)
+ * - Ended: Contract end date is in the past
+ */
+export function getPartnerStatus(
+  contractStartDate: string | null,
+  contractEndDate: string | null
+): 'prospect' | 'active' | 'ended' {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  // No contract dates = prospect
+  if (!contractStartDate && !contractEndDate) {
+    return 'prospect'
+  }
+
+  // Has end date that's in the past = ended
+  if (contractEndDate) {
+    const endDate = new Date(contractEndDate)
+    endDate.setHours(0, 0, 0, 0)
+    if (endDate < today) {
+      return 'ended'
+    }
+  }
+
+  // Has start date, either no end date or end date is in the future = active
+  if (contractStartDate) {
+    const startDate = new Date(contractStartDate)
+    startDate.setHours(0, 0, 0, 0)
+    if (startDate <= today) {
+      return 'active'
+    }
+    // Start date is in the future - still prospect
+    return 'prospect'
+  }
+
+  // Only has end date in the future, no start date = prospect
+  return 'prospect'
+}
+
+/**
+ * Calculate partner payout based on rate type
+ * - Per Video: rate * number of videos published in time frame
+ * - Per Month: rate * number of months in time frame (prorated)
+ */
+export function calculatePartnerPayout(
+  rate: number,
+  rateType: 'per_video' | 'per_month',
+  videoCount: number,
+  monthsInRange: number = 1
+): number {
+  if (rateType === 'per_video') {
+    return rate * videoCount
+  } else {
+    return rate * monthsInRange
+  }
+}
+
+/**
+ * Calculate number of months between two dates (for monthly partner payouts)
+ */
+export function calculateMonthsInRange(startDate: Date, endDate: Date): number {
+  const months = (endDate.getFullYear() - startDate.getFullYear()) * 12 +
+    (endDate.getMonth() - startDate.getMonth()) + 1
+  return Math.max(1, months)
+}

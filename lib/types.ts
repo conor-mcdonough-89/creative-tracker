@@ -10,6 +10,12 @@ export type AdStatus = 'not_running' | 'running' | 'completed' | 'unknown'
 // Payout method for creators
 export type PayoutMethod = 'venmo' | 'gusto' | 'sidelineswap' | 'zelle'
 
+// Partner rate type
+export type PartnerRateType = 'per_video' | 'per_month'
+
+// Partner status (computed based on contract dates)
+export type PartnerStatus = 'prospect' | 'active' | 'ended'
+
 // Sports
 export interface Sport {
   id: string
@@ -50,6 +56,49 @@ export interface CreatorPattern {
   creator_id: string
   pattern: string
   created_at: string
+}
+
+// Partner (fixed-rate creator)
+export interface Partner {
+  id: string
+  name: string
+  handle: string
+  social_links: {
+    tiktok?: string
+    instagram?: string
+    youtube?: string
+    twitter?: string
+    [key: string]: string | undefined
+  }
+  payout_method: PayoutMethod | null
+  payout_username: string | null
+  rate: number
+  rate_type: PartnerRateType
+  contract_start_date: string | null
+  contract_end_date: string | null
+  contact_info: string | null
+  notes: string | null
+  converted_from_creator_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+// Partner pattern for ad matching
+export interface PartnerPattern {
+  id: string
+  partner_id: string
+  pattern: string
+  created_at: string
+}
+
+// Partner with aggregated performance and computed status
+export interface PartnerWithPerformance extends Partner {
+  performance: AggregatedPerformance
+  sports: Sport[]
+  matched_ads_count: number
+  status: PartnerStatus
+  video_count: number // for per_video rate calculation
+  calculated_payout: number // rate * video_count or rate (for monthly)
 }
 
 // Creator video (raw video tracking)
