@@ -74,7 +74,7 @@ export function Sidebar() {
       {/* Logo */}
       <div className="flex h-16 items-center border-b px-6">
         <Link href="/dashboard" className="flex items-center gap-2">
-          <Film className="h-6 w-6 text-sidebar-primary" />
+          <img src="https://cdn.buttercms.com/WiHAVq7ZTXmyInEzFpFR" alt="Logo" className="h-6 w-6" />
           <span className="font-semibold text-sidebar-foreground">
             Creative Tracker
           </span>
