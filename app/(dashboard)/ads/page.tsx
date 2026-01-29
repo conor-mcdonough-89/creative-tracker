@@ -26,9 +26,10 @@ import {
 } from '@/components/ui/select'
 import { DateRangePicker, getDefaultDateRange } from '@/components/dashboard/DateRangePicker'
 import { FilterBar } from '@/components/dashboard/FilterBar'
-import { formatCurrency, formatCompactNumber, aggregatePerformance } from '@/lib/calculations'
+import { usePlatformAdjustments } from '@/hooks/usePlatformAdjustments'
+import { formatCurrency, formatCompactNumber } from '@/lib/calculations'
 import { Search, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
-import type { Platform, Sport, Creator, CreatorPattern, AdPerformance } from '@/lib/types'
+import type { Platform, Sport, Creator, CreatorPattern, AdWithRelations } from '@/lib/types'
 
 interface AggregatedAd {
   ad_name: string
@@ -59,10 +60,13 @@ export default function AdsPage() {
   const [sports, setSports] = useState<Sport[]>([])
   const [creators, setCreators] = useState<Creator[]>([])
   const [patterns, setPatterns] = useState<CreatorPattern[]>([])
-  const [performanceData, setPerformanceData] = useState<AdPerformance[]>([])
+  const [performanceData, setPerformanceData] = useState<AdWithRelations[]>([])
   const [loading, setLoading] = useState(true)
 
   const supabase = createClient()
+
+  // Load platform adjustments for consistent metrics
+  usePlatformAdjustments()
 
   // Load reference data
   useEffect(() => {
@@ -87,8 +91,9 @@ export default function AdsPage() {
 
       setLoading(true)
 
+      // Query the view that includes pre-calculated platform adjustments
       let query = supabase
-        .from('ad_performance')
+        .from('ads_with_creators')
         .select('*')
         .gte('date', format(dateRange.from, 'yyyy-MM-dd'))
         .lte('date', format(dateRange.to, 'yyyy-MM-dd'))
@@ -104,7 +109,7 @@ export default function AdsPage() {
       const { data, error } = await query.order('date', { ascending: false })
 
       if (data && !error) {
-        setPerformanceData(data as AdPerformance[])
+        setPerformanceData(data as AdWithRelations[])
       }
       setLoading(false)
     }
@@ -112,9 +117,9 @@ export default function AdsPage() {
     loadPerformanceData()
   }, [supabase, dateRange, selectedPlatforms, selectedSports])
 
-  // Aggregate ads and match to creators
+  // Aggregate ads (view already provides creator matching and platform adjustments)
   const aggregatedAds = useMemo((): AggregatedAd[] => {
-    const adMap = new Map<string, AdPerformance[]>()
+    const adMap = new Map<string, AdWithRelations[]>()
 
     // Group by ad_name + platform
     performanceData.forEach((record) => {
@@ -130,32 +135,35 @@ export default function AdsPage() {
       const [ad_name, platform] = key.split('|||')
       const firstRecord = records[0]
 
-      // Find matching creator
-      let creator_id: string | null = null
-      let creator_name: string | null = null
+      // Use creator data from the view (already matched by database)
+      // Fall back to pattern matching for any unmatched ads
+      let creator_id = firstRecord.creator_id || null
+      let creator_name = firstRecord.creator_name || null
 
-      for (const pattern of patterns) {
-        if (ad_name.toLowerCase().includes(pattern.pattern.toLowerCase())) {
-          const creator = creators.find((c) => c.id === pattern.creator_id)
-          if (creator) {
-            creator_id = creator.id
-            creator_name = creator.name
-            break
+      if (!creator_id) {
+        for (const pattern of patterns) {
+          if (ad_name.toLowerCase().includes(pattern.pattern.toLowerCase())) {
+            const creator = creators.find((c) => c.id === pattern.creator_id)
+            if (creator) {
+              creator_id = creator.id
+              creator_name = creator.name
+              break
+            }
           }
         }
       }
 
-      // Find sport name
-      const sport = sports.find((s) => s.id === firstRecord.sport_id)
+      // Use sport name from view or fall back to lookup
+      const sport_name = firstRecord.sport_name || sports.find((s) => s.id === firstRecord.sport_id)?.name || null
 
-      // Aggregate metrics
+      // Aggregate metrics using platform-adjusted values
       const totals = records.reduce(
         (acc, r) => ({
           impressions: acc.impressions + r.impressions,
           clicks: acc.clicks + r.clicks,
           spend: acc.spend + r.spend,
-          conversions: acc.conversions + r.conversions,
-          conversion_value: acc.conversion_value + r.conversion_value,
+          conversions: acc.conversions + (r.adjusted_conversions ?? r.conversions),
+          conversion_value: acc.conversion_value + (r.adjusted_conversion_value ?? r.conversion_value),
         }),
         { impressions: 0, clicks: 0, spend: 0, conversions: 0, conversion_value: 0 }
       )
@@ -164,7 +172,7 @@ export default function AdsPage() {
         ad_name,
         platform: platform as Platform,
         sport_id: firstRecord.sport_id,
-        sport_name: sport?.name || null,
+        sport_name,
         creator_id,
         creator_name,
         creative_url: firstRecord.creative_url,
