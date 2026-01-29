@@ -182,6 +182,12 @@ export default function CreatorsPage() {
     })
   }, [creatorsWithPerformance, sortField, sortDirection])
 
+  // Filter creators by selection
+  const filteredCreators = useMemo(() => {
+    if (selectedCreators.length === 0) return sortedCreators
+    return sortedCreators.filter((c) => selectedCreators.includes(c.id))
+  }, [sortedCreators, selectedCreators])
+
   const handleSort = (field: string) => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
@@ -197,7 +203,7 @@ export default function CreatorsPage() {
       : 'all_time'
 
     const headers = ['Creator Name', 'Handle', 'Date Range', 'GMV', 'Revenue', 'Payout Amount']
-    const rows = sortedCreators.map((c) => [
+    const rows = filteredCreators.map((c) => [
       c.name,
       `@${c.handle}`,
       dateLabel.replace(/_/g, ' '),
@@ -353,7 +359,7 @@ export default function CreatorsPage() {
 
       {/* Creator Table */}
       <CreatorTable
-        creators={sortedCreators}
+        creators={filteredCreators}
         loading={loading}
         sortField={sortField}
         sortDirection={sortDirection}
