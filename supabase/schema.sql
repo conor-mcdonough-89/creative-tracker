@@ -543,3 +543,46 @@ begin
   );
 end;
 $$ language plpgsql;
+
+-- Import logs table (for tracking and rolling back data imports)
+create table if not exists import_logs (
+  id uuid primary key default uuid_generate_v4(),
+  file_name text not null,
+  platform platform_enum not null,
+  record_count integer not null default 0,
+  date_range_start date,
+  date_range_end date,
+  imported_by text,
+  status text not null default 'completed', -- 'completed', 'rolled_back'
+  rolled_back_at timestamp with time zone,
+  rolled_back_by text,
+  created_at timestamp with time zone default now()
+);
+
+-- Add import_id to ad_performance to track which import created each record
+alter table ad_performance add column if not exists import_id uuid references import_logs(id) on delete set null;
+
+-- Index for import lookups
+create index if not exists idx_ad_performance_import on ad_performance(import_id);
+create index if not exists idx_import_logs_created on import_logs(created_at desc);
+create index if not exists idx_import_logs_status on import_logs(status);
+
+-- RLS for import_logs
+alter table import_logs enable row level security;
+
+drop policy if exists "Authenticated users can read all import_logs" on import_logs;
+drop policy if exists "Authenticated users can insert import_logs" on import_logs;
+drop policy if exists "Authenticated users can update import_logs" on import_logs;
+drop policy if exists "Authenticated users can delete import_logs" on import_logs;
+
+create policy "Authenticated users can read all import_logs" on import_logs
+  for select using (auth.role() = 'authenticated');
+
+create policy "Authenticated users can insert import_logs" on import_logs
+  for insert with check (auth.role() = 'authenticated');
+
+create policy "Authenticated users can update import_logs" on import_logs
+  for update using (auth.role() = 'authenticated');
+
+create policy "Authenticated users can delete import_logs" on import_logs
+  for delete using (auth.role() = 'authenticated');
