@@ -2,12 +2,12 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { format } from 'date-fns'
-import { DateRange } from 'react-day-picker'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { DateRangePicker, getDefaultDateRange } from '@/components/dashboard/DateRangePicker'
+import { DateRangePicker } from '@/components/dashboard/DateRangePicker'
+import { useDateRange } from '@/lib/date-context'
 import { FilterBar } from '@/components/dashboard/FilterBar'
 import { CreatorTable } from '@/components/creators/CreatorTable'
 import { usePlatformAdjustments } from '@/hooks/usePlatformAdjustments'
@@ -17,7 +17,7 @@ import type { Platform, Sport, Creator, CreatorPattern, AdPerformance, CreatorWi
 
 export default function CreatorsPage() {
   const router = useRouter()
-  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => getDefaultDateRange())
+  const { dateRange, setDateRange } = useDateRange()
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>([])
   const [selectedSports, setSelectedSports] = useState<string[]>([])
   const [selectedCreators, setSelectedCreators] = useState<string[]>([])

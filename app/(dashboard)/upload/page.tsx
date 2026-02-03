@@ -177,12 +177,15 @@ export default function UploadPage() {
         }
 
         const parseDate = (value: string): string => {
+          if (!value || value.trim() === '' || value.trim() === '-') {
+            return ''
+          }
           // Try to parse various date formats
           const date = new Date(value)
           if (!isNaN(date.getTime())) {
             return date.toISOString().split('T')[0]
           }
-          return value
+          return ''
         }
 
         const adName = row[mappings.ad_name] || ''
@@ -210,10 +213,19 @@ export default function UploadPage() {
         }
       }).filter((record) => record.ad_name && record.date)
 
+      // Deduplicate records by ad_name + platform + date (keep last occurrence)
+      const deduped = Array.from(
+        records.reduce((map, record) => {
+          const key = `${record.ad_name}|${record.platform}|${record.date}`
+          map.set(key, record)
+          return map
+        }, new Map()).values()
+      )
+
       // Upsert data
       const { error: uploadError } = await supabase
         .from('ad_performance')
-        .upsert(records, {
+        .upsert(deduped, {
           onConflict: 'ad_name,platform,date',
           ignoreDuplicates: false,
         })
