@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { format } from 'date-fns'
-import { DateRange } from 'react-day-picker'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { DateRangePicker, getDefaultDateRange } from '@/components/dashboard/DateRangePicker'
+import { DateRangePicker } from '@/components/dashboard/DateRangePicker'
+import { useDateRange } from '@/lib/date-context'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PartnerTable } from '@/components/partners/PartnerTable'
 import { usePlatformAdjustments } from '@/hooks/usePlatformAdjustments'
@@ -15,7 +15,7 @@ import { Plus, Download } from 'lucide-react'
 import type { Platform, Sport, Partner, PartnerPattern, AdPerformance, PartnerWithPerformance, PartnerStatus, CreatorVideo } from '@/lib/types'
 
 export default function PartnersPage() {
-  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => getDefaultDateRange())
+  const { dateRange, setDateRange } = useDateRange()
   const [statusFilter, setStatusFilter] = useState<PartnerStatus | 'all'>('all')
 
   const [sports, setSports] = useState<Sport[]>([])

@@ -4,7 +4,6 @@ import { useState, useEffect, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { format } from 'date-fns'
-import { DateRange } from 'react-day-picker'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -28,7 +27,8 @@ import {
 } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { MetricCard } from '@/components/dashboard/MetricCard'
-import { DateRangePicker, getDefaultDateRange } from '@/components/dashboard/DateRangePicker'
+import { DateRangePicker } from '@/components/dashboard/DateRangePicker'
+import { useDateRange } from '@/lib/date-context'
 import { GranularityToggle } from '@/components/dashboard/GranularityToggle'
 import { TimeSeriesChart } from '@/components/dashboard/TimeSeriesChart'
 import { PlatformBreakdownChart } from '@/components/dashboard/PlatformBreakdownChart'
@@ -55,7 +55,7 @@ export default function PartnerDetailPage() {
   const router = useRouter()
   const partnerId = params.id as string
 
-  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => getDefaultDateRange())
+  const { dateRange, setDateRange } = useDateRange()
   const [granularity, setGranularity] = useState<Granularity>('daily')
 
   const [partner, setPartner] = useState<Partner | null>(null)
