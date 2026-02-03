@@ -177,12 +177,15 @@ export default function UploadPage() {
         }
 
         const parseDate = (value: string): string => {
+          if (!value || value.trim() === '' || value.trim() === '-') {
+            return ''
+          }
           // Try to parse various date formats
           const date = new Date(value)
           if (!isNaN(date.getTime())) {
             return date.toISOString().split('T')[0]
           }
-          return value
+          return ''
         }
 
         const adName = row[mappings.ad_name] || ''
