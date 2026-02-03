@@ -16,6 +16,7 @@ import {
   ChevronDown,
   Video,
   SlidersHorizontal,
+  History,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -72,6 +73,11 @@ const settingsNavigation = [
     name: 'Platform Adjustments',
     href: '/settings/adjustments',
     icon: SlidersHorizontal,
+  },
+  {
+    name: 'Import History',
+    href: '/settings/imports',
+    icon: History,
   },
 ]
 

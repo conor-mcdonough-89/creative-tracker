@@ -325,3 +325,21 @@ export const DEFAULT_SPORTS = [
   'Tennis',
   'Other',
 ] as const
+
+// Import log status
+export type ImportStatus = 'completed' | 'rolled_back'
+
+// Import log (for tracking and rolling back data imports)
+export interface ImportLog {
+  id: string
+  file_name: string
+  platform: Platform
+  record_count: number
+  date_range_start: string | null
+  date_range_end: string | null
+  imported_by: string | null
+  status: ImportStatus
+  rolled_back_at: string | null
+  rolled_back_by: string | null
+  created_at: string
+}

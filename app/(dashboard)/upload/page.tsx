@@ -168,6 +168,10 @@ export default function UploadPage() {
     setError(null)
 
     try {
+      // Get current user email for logging
+      const { data: { user } } = await supabase.auth.getUser()
+      const userEmail = user?.email || null
+
       // Transform CSV data to match our schema
       const records = csvData.map((row) => {
         const parseNumber = (value: string): number => {
@@ -220,17 +224,52 @@ export default function UploadPage() {
           map.set(key, record)
           return map
         }, new Map()).values()
-      )
+      ) as typeof records
+
+      // Calculate date range from records
+      const dates = deduped.map(r => r.date).filter(Boolean).sort()
+      const dateRangeStart = dates[0] || null
+      const dateRangeEnd = dates[dates.length - 1] || null
+
+      // Create import log first
+      const { data: importLog, error: importLogError } = await supabase
+        .from('import_logs')
+        .insert({
+          file_name: file?.name || 'unknown',
+          platform,
+          record_count: deduped.length,
+          date_range_start: dateRangeStart,
+          date_range_end: dateRangeEnd,
+          imported_by: userEmail,
+          status: 'completed',
+        })
+        .select()
+        .single()
+
+      if (importLogError) {
+        throw new Error(`Failed to create import log: ${importLogError.message}`)
+      }
+
+      // Add import_id to all records
+      const recordsWithImportId = deduped.map(record => ({
+        ...record,
+        import_id: importLog.id,
+      }))
 
       // Upsert data
       const { error: uploadError } = await supabase
         .from('ad_performance')
-        .upsert(deduped, {
+        .upsert(recordsWithImportId, {
           onConflict: 'ad_name,platform,date',
           ignoreDuplicates: false,
         })
 
       if (uploadError) {
+        // If upload fails, mark import log as failed
+        await supabase
+          .from('import_logs')
+          .delete()
+          .eq('id', importLog.id)
         throw new Error(uploadError.message)
       }
 
