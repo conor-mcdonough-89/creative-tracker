@@ -58,6 +58,7 @@ export function VideoDialog({ open, onClose, video, sports, creators }: VideoDia
     creator_id: '',
     sport_id: '',
     title: '',
+    caption: '',
     platform: 'tiktok' as VideoPlatform,
     posted_link: '',
     drive_link: '',
@@ -75,6 +76,7 @@ export function VideoDialog({ open, onClose, video, sports, creators }: VideoDia
         creator_id: video.creator_id || '',
         sport_id: video.sport_id || '',
         title: video.title || '',
+        caption: video.caption || '',
         platform: video.platform,
         posted_link: video.posted_link || '',
         drive_link: video.drive_link || '',
@@ -88,6 +90,7 @@ export function VideoDialog({ open, onClose, video, sports, creators }: VideoDia
         creator_id: '',
         sport_id: '',
         title: '',
+        caption: '',
         platform: 'tiktok',
         posted_link: '',
         drive_link: '',
@@ -107,6 +110,7 @@ export function VideoDialog({ open, onClose, video, sports, creators }: VideoDia
       creator_id: formData.creator_id || null,
       sport_id: formData.sport_id || null,
       title: formData.title || null,
+      caption: formData.caption || null,
       platform: formData.platform,
       posted_link: formData.posted_link || null,
       drive_link: formData.drive_link || null,
@@ -212,6 +216,22 @@ export function VideoDialog({ open, onClose, video, sports, creators }: VideoDia
                 }
                 placeholder="Video title or description"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="caption">Caption (for TikTok ad matching)</Label>
+              <Textarea
+                id="caption"
+                value={formData.caption}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, caption: e.target.value }))
+                }
+                placeholder="e.g., Download the @SidelineSwap App now! #fyp #hockey #ad"
+                rows={2}
+              />
+              <p className="text-xs text-muted-foreground">
+                Used to match TikTok ads where the ad name is the video caption
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">

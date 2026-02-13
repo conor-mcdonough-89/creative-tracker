@@ -240,19 +240,21 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
 
--- View for ads with creator matching (using pattern matching)
+-- View for ads with creator matching (using pattern matching and video captions)
 -- Includes platform-adjusted conversion values
+-- Matching priority: 1) creator_patterns (substring), 2) creator_videos.caption (exact)
 create or replace view ads_with_creators as
 select
   ap.*,
-  c.creator_id,
-  c.creator_name,
-  c.creator_handle,
+  COALESCE(c.creator_id, vc.creator_id) as creator_id,
+  COALESCE(c.creator_name, vc.creator_name) as creator_name,
+  COALESCE(c.creator_handle, vc.creator_handle) as creator_handle,
   s.name as sport_name,
   COALESCE(pa.conversion_discount, 1.0) as platform_multiplier,
   ap.conversions * COALESCE(pa.conversion_discount, 1.0) as adjusted_conversions,
   ap.conversion_value * COALESCE(pa.conversion_discount, 1.0) as adjusted_conversion_value
 from ad_performance ap
+-- First priority: pattern matching
 left join lateral (
   select cp.creator_id, cr.name as creator_name, cr.handle as creator_handle
   from creator_patterns cp
@@ -260,6 +262,16 @@ left join lateral (
   where ap.ad_name ilike '%' || cp.pattern || '%'
   limit 1
 ) c on true
+-- Second priority: video caption matching (exact match, only if pattern didn't match)
+left join lateral (
+  select cv.creator_id, cr.name as creator_name, cr.handle as creator_handle
+  from creator_videos cv
+  join creators cr on cv.creator_id = cr.id
+  where c.creator_id is null  -- Only try if pattern match failed
+    and cv.caption is not null
+    and ap.ad_name = cv.caption
+  limit 1
+) vc on true
 left join sports s on ap.sport_id = s.id
 left join platform_adjustments pa on ap.platform = pa.platform;
 
@@ -278,6 +290,7 @@ create table if not exists creator_videos (
   creator_id uuid references creators(id) on delete cascade,
   sport_id uuid references sports(id),
   title text,
+  caption text, -- Video caption for matching TikTok ads (exact match on ad_name)
   platform video_platform_enum not null default 'tiktok',
   posted_link text,
   drive_link text,
@@ -294,6 +307,7 @@ create index if not exists idx_creator_videos_creator on creator_videos(creator_
 create index if not exists idx_creator_videos_sport on creator_videos(sport_id);
 create index if not exists idx_creator_videos_status on creator_videos(ad_status);
 create index if not exists idx_creator_videos_platform on creator_videos(platform);
+create index if not exists idx_creator_videos_caption on creator_videos(caption);
 
 -- Trigger for updated_at
 drop trigger if exists update_creator_videos_updated_at on creator_videos;
@@ -321,7 +335,7 @@ create policy "Authenticated users can update creator_videos" on creator_videos
 create policy "Authenticated users can delete creator_videos" on creator_videos
   for delete using (auth.role() = 'authenticated');
 
--- View for creator videos with relations
+-- View for creator videos with relations (caption is part of cv.*)
 create or replace view creator_videos_with_relations as
 select
   cv.*,

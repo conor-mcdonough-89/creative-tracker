@@ -132,6 +132,7 @@ export interface CreatorVideo {
   creator_id: string | null
   sport_id: string | null
   title: string | null
+  caption: string | null  // Video caption for matching TikTok ads (exact match on ad_name)
   platform: VideoPlatform
   posted_link: string | null
   drive_link: string | null
