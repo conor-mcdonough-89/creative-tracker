@@ -54,6 +54,7 @@ const adPlatformOptions: { value: Platform; label: string }[] = [
 
 export function VideoDialog({ open, onClose, video, sports, creators }: VideoDialogProps) {
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     creator_id: '',
     sport_id: '',
@@ -100,11 +101,13 @@ export function VideoDialog({ open, onClose, video, sports, creators }: VideoDia
         notes: '',
       })
     }
+    setError(null)
   }, [video, open])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
+    setError(null)
 
     const data = {
       creator_id: formData.creator_id || null,
@@ -120,24 +123,25 @@ export function VideoDialog({ open, onClose, video, sports, creators }: VideoDia
       notes: formData.notes || null,
     }
 
-    let error
+    let saveError
     if (video) {
       const result = await supabase
         .from('creator_videos')
         .update(data)
         .eq('id', video.id)
-      error = result.error
+      saveError = result.error
     } else {
       const result = await supabase.from('creator_videos').insert(data)
-      error = result.error
+      saveError = result.error
     }
 
     setSaving(false)
 
-    if (!error) {
+    if (!saveError) {
       onClose(true)
     } else {
-      console.error('Error saving video:', error)
+      console.error('Error saving video:', saveError)
+      setError(saveError.message || 'Failed to save video')
     }
   }
 
@@ -152,8 +156,8 @@ export function VideoDialog({ open, onClose, video, sports, creators }: VideoDia
 
   return (
     <Dialog open={open} onOpenChange={() => onClose()}>
-      <DialogContent className="sm:max-w-[500px]">
-        <form onSubmit={handleSubmit}>
+      <DialogContent className="sm:max-w-[500px] max-h-[85vh] flex flex-col">
+        <form onSubmit={handleSubmit} className="flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle>{video ? 'Edit Video' : 'Add Video'}</DialogTitle>
             <DialogDescription>
@@ -161,7 +165,13 @@ export function VideoDialog({ open, onClose, video, sports, creators }: VideoDia
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 py-4">
+          {error && (
+            <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive mt-2">
+              {error}
+            </div>
+          )}
+
+          <div className="grid gap-4 py-4 overflow-y-auto flex-1 pr-2">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="creator">Creator</Label>
@@ -351,7 +361,7 @@ export function VideoDialog({ open, onClose, video, sports, creators }: VideoDia
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="pt-4 border-t mt-4">
             <Button type="button" variant="outline" onClick={() => onClose()}>
               Cancel
             </Button>
