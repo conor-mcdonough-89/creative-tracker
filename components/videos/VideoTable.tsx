@@ -1,6 +1,6 @@
 'use client'
 
-import { ExternalLink, Pencil, Trash2, MoreHorizontal } from 'lucide-react'
+import { ExternalLink, Pencil, Trash2, MoreHorizontal, Eye } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Table,
@@ -34,6 +34,7 @@ import type { CreatorVideoWithRelations, AdStatus, VideoPlatform } from '@/lib/t
 interface VideoTableProps {
   videos: CreatorVideoWithRelations[]
   loading: boolean
+  onView?: (video: CreatorVideoWithRelations) => void
   onEdit: (video: CreatorVideoWithRelations) => void
   onDelete: (videoId: string) => void
 }
@@ -52,7 +53,7 @@ const statusConfig: Record<AdStatus, { label: string; variant: 'default' | 'seco
   unknown: { label: 'Unknown', variant: 'destructive' },
 }
 
-export function VideoTable({ videos, loading, onEdit, onDelete }: VideoTableProps) {
+export function VideoTable({ videos, loading, onView, onEdit, onDelete }: VideoTableProps) {
   if (loading) {
     return (
       <div className="rounded-lg border">
@@ -181,6 +182,12 @@ export function VideoTable({ videos, loading, onEdit, onDelete }: VideoTableProp
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
+                    {onView && (
+                      <DropdownMenuItem onClick={() => onView(video)}>
+                        <Eye className="mr-2 h-4 w-4" />
+                        View
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem onClick={() => onEdit(video)}>
                       <Pencil className="mr-2 h-4 w-4" />
                       Edit

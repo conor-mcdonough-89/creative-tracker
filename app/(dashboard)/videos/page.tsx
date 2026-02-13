@@ -32,6 +32,7 @@ export default function VideosPage() {
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingVideo, setEditingVideo] = useState<CreatorVideoWithRelations | null>(null)
+  const [dialogMode, setDialogMode] = useState<'view' | 'edit' | 'add'>('add')
 
   const supabase = createClient()
 
@@ -102,11 +103,19 @@ export default function VideosPage() {
 
   const handleAddVideo = () => {
     setEditingVideo(null)
+    setDialogMode('add')
+    setDialogOpen(true)
+  }
+
+  const handleViewVideo = (video: CreatorVideoWithRelations) => {
+    setEditingVideo(video)
+    setDialogMode('view')
     setDialogOpen(true)
   }
 
   const handleEditVideo = (video: CreatorVideoWithRelations) => {
     setEditingVideo(video)
+    setDialogMode('edit')
     setDialogOpen(true)
   }
 
@@ -120,9 +129,14 @@ export default function VideosPage() {
   const handleDialogClose = (refresh?: boolean) => {
     setDialogOpen(false)
     setEditingVideo(null)
+    setDialogMode('add')
     if (refresh) {
       loadVideos()
     }
+  }
+
+  const handleSwitchToEdit = () => {
+    setDialogMode('edit')
   }
 
   // Stats for the summary cards
@@ -244,17 +258,20 @@ export default function VideosPage() {
       <VideoTable
         videos={filteredVideos}
         loading={loading}
+        onView={handleViewVideo}
         onEdit={handleEditVideo}
         onDelete={handleDeleteVideo}
       />
 
-      {/* Add/Edit Dialog */}
+      {/* Add/Edit/View Dialog */}
       <VideoDialog
         open={dialogOpen}
         onClose={handleDialogClose}
         video={editingVideo}
         sports={sports}
         creators={creators}
+        mode={dialogMode}
+        onEditClick={handleSwitchToEdit}
       />
     </div>
   )
