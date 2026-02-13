@@ -5,6 +5,7 @@ import { format } from 'date-fns'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
 import {
   Table,
   TableBody,
@@ -32,7 +33,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Skeleton } from '@/components/ui/skeleton'
-import { FileText, RotateCcw, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react'
+import { FileText, RotateCcw, AlertTriangle, CheckCircle2, XCircle, Trash2 } from 'lucide-react'
 import type { ImportLog, Platform } from '@/lib/types'
 
 const PLATFORM_LABELS: Record<Platform, string> = {
@@ -47,6 +48,12 @@ const PLATFORM_COLORS: Record<Platform, string> = {
   google: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
 }
 
+interface LegacyData {
+  count: number
+  platforms: { platform: Platform; count: number }[]
+  dateRange: { min: string | null; max: string | null }
+}
+
 export default function ImportHistoryPage() {
   const [imports, setImports] = useState<ImportLog[]>([])
   const [loading, setLoading] = useState(true)
@@ -54,6 +61,13 @@ export default function ImportHistoryPage() {
   const [rollbackDialogOpen, setRollbackDialogOpen] = useState(false)
   const [rollingBack, setRollingBack] = useState(false)
   const [rollbackResult, setRollbackResult] = useState<{ success: boolean; message: string; deletedCount?: number } | null>(null)
+
+  // Legacy data state
+  const [legacyData, setLegacyData] = useState<LegacyData | null>(null)
+  const [legacyDeleteDialogOpen, setLegacyDeleteDialogOpen] = useState(false)
+  const [legacyConfirmText, setLegacyConfirmText] = useState('')
+  const [deletingLegacy, setDeletingLegacy] = useState(false)
+  const [legacyDeleteResult, setLegacyDeleteResult] = useState<{ success: boolean; message: string; deletedCount?: number } | null>(null)
 
   const supabase = createClient()
 
@@ -70,8 +84,100 @@ export default function ImportHistoryPage() {
     setLoading(false)
   }
 
+  const loadLegacyData = async () => {
+    // Count total legacy records (no import_id)
+    const { count } = await supabase
+      .from('ad_performance')
+      .select('*', { count: 'exact', head: true })
+      .is('import_id', null)
+
+    if (!count || count === 0) {
+      setLegacyData(null)
+      return
+    }
+
+    // Get platform breakdown
+    const { data: platformData } = await supabase
+      .from('ad_performance')
+      .select('platform')
+      .is('import_id', null)
+
+    const platformCounts: Record<string, number> = {}
+    if (platformData) {
+      platformData.forEach((row: { platform: Platform }) => {
+        platformCounts[row.platform] = (platformCounts[row.platform] || 0) + 1
+      })
+    }
+
+    // Get date range
+    const { data: dateData } = await supabase
+      .from('ad_performance')
+      .select('date')
+      .is('import_id', null)
+      .order('date', { ascending: true })
+      .limit(1)
+
+    const { data: maxDateData } = await supabase
+      .from('ad_performance')
+      .select('date')
+      .is('import_id', null)
+      .order('date', { ascending: false })
+      .limit(1)
+
+    setLegacyData({
+      count,
+      platforms: Object.entries(platformCounts).map(([platform, count]) => ({
+        platform: platform as Platform,
+        count,
+      })),
+      dateRange: {
+        min: dateData?.[0]?.date || null,
+        max: maxDateData?.[0]?.date || null,
+      },
+    })
+  }
+
+  const handleDeleteLegacy = async () => {
+    if (legacyConfirmText !== 'REMOVE') return
+
+    setDeletingLegacy(true)
+    setLegacyDeleteResult(null)
+
+    try {
+      const countBefore = legacyData?.count || 0
+
+      const { error } = await supabase
+        .from('ad_performance')
+        .delete()
+        .is('import_id', null)
+
+      if (error) {
+        throw new Error(error.message)
+      }
+
+      setLegacyDeleteResult({
+        success: true,
+        message: 'Successfully deleted legacy data',
+        deletedCount: countBefore,
+      })
+
+      // Refresh data
+      loadLegacyData()
+      setLegacyDeleteDialogOpen(false)
+      setLegacyConfirmText('')
+    } catch (err) {
+      setLegacyDeleteResult({
+        success: false,
+        message: err instanceof Error ? err.message : 'Delete failed',
+      })
+    } finally {
+      setDeletingLegacy(false)
+    }
+  }
+
   useEffect(() => {
     loadImports()
+    loadLegacyData()
   }, [])
 
   const handleRollback = async () => {
@@ -162,6 +268,45 @@ export default function ImportHistoryPage() {
           </div>
         </div>
       </div>
+
+      {/* Legacy data section */}
+      {legacyData && legacyData.count > 0 && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-destructive mt-0.5" />
+              <div>
+                <h4 className="font-medium text-destructive">
+                  Legacy Data Found ({legacyData.count.toLocaleString()} records)
+                </h4>
+                <p className="text-sm text-muted-foreground mt-1">
+                  These records were imported before import tracking was enabled and cannot be individually rolled back.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {legacyData.platforms.map(({ platform, count }) => (
+                    <Badge key={platform} className={PLATFORM_COLORS[platform]}>
+                      {PLATFORM_LABELS[platform]}: {count.toLocaleString()}
+                    </Badge>
+                  ))}
+                </div>
+                {legacyData.dateRange.min && legacyData.dateRange.max && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Date range: {format(new Date(legacyData.dateRange.min), 'MMM d, yyyy')} - {format(new Date(legacyData.dateRange.max), 'MMM d, yyyy')}
+                  </p>
+                )}
+              </div>
+            </div>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setLegacyDeleteDialogOpen(true)}
+            >
+              <Trash2 className="h-4 w-4 mr-1" />
+              Delete All Legacy Data
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Import history table */}
       <div className="rounded-md border">
@@ -323,6 +468,96 @@ export default function ImportHistoryPage() {
           </DialogHeader>
           <DialogFooter>
             <Button onClick={() => setRollbackResult(null)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Legacy data delete dialog */}
+      <Dialog open={legacyDeleteDialogOpen} onOpenChange={(open) => {
+        setLegacyDeleteDialogOpen(open)
+        if (!open) setLegacyConfirmText('')
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Delete All Legacy Data?
+            </DialogTitle>
+            <DialogDescription className="space-y-3 pt-2">
+              <p>
+                This will permanently delete <strong>{legacyData?.count.toLocaleString()}</strong> ad performance records
+                that were imported before import tracking was enabled.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {legacyData?.platforms.map(({ platform, count }) => (
+                  <Badge key={platform} className={PLATFORM_COLORS[platform]}>
+                    {PLATFORM_LABELS[platform]}: {count.toLocaleString()}
+                  </Badge>
+                ))}
+              </div>
+              <p className="text-amber-600 dark:text-amber-400 font-medium">
+                This action cannot be undone.
+              </p>
+              <div className="pt-2">
+                <p className="text-sm mb-2">Type <strong>REMOVE</strong> to confirm:</p>
+                <Input
+                  value={legacyConfirmText}
+                  onChange={(e) => setLegacyConfirmText(e.target.value)}
+                  placeholder="REMOVE"
+                  className="font-mono"
+                />
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setLegacyDeleteDialogOpen(false)
+                setLegacyConfirmText('')
+              }}
+              disabled={deletingLegacy}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteLegacy}
+              disabled={legacyConfirmText !== 'REMOVE' || deletingLegacy}
+            >
+              {deletingLegacy ? 'Deleting...' : 'Delete All Legacy Data'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Legacy delete result dialog */}
+      <Dialog open={legacyDeleteResult !== null} onOpenChange={() => setLegacyDeleteResult(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {legacyDeleteResult?.success ? (
+                <>
+                  <CheckCircle2 className="h-5 w-5 text-green-500" />
+                  Delete Complete
+                </>
+              ) : (
+                <>
+                  <XCircle className="h-5 w-5 text-destructive" />
+                  Delete Failed
+                </>
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              {legacyDeleteResult?.success ? (
+                <>Deleted {legacyDeleteResult.deletedCount?.toLocaleString()} legacy records from the database.</>
+              ) : (
+                legacyDeleteResult?.message
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setLegacyDeleteResult(null)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
