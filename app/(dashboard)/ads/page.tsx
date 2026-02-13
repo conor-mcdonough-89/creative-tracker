@@ -3,7 +3,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { format } from 'date-fns'
-import { DateRange } from 'react-day-picker'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,7 +23,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { DateRangePicker, getDefaultDateRange } from '@/components/dashboard/DateRangePicker'
+import { DateRangePicker } from '@/components/dashboard/DateRangePicker'
+import { useDateRange } from '@/lib/date-context'
 import { FilterBar } from '@/components/dashboard/FilterBar'
 import { usePlatformAdjustments } from '@/hooks/usePlatformAdjustments'
 import { formatCurrency, formatCompactNumber } from '@/lib/calculations'
@@ -48,7 +48,7 @@ interface AggregatedAd {
 }
 
 export default function AdsPage() {
-  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => getDefaultDateRange())
+  const { dateRange, setDateRange } = useDateRange()
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>([])
   const [selectedSports, setSelectedSports] = useState<string[]>([])
   const [selectedCreators, setSelectedCreators] = useState<string[]>([])

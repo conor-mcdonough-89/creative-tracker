@@ -6,6 +6,8 @@ import { cn } from '@/lib/utils'
 import {
   LayoutDashboard,
   Users,
+  Handshake,
+  Receipt,
   Film,
   Upload,
   Settings,
@@ -14,7 +16,7 @@ import {
   ChevronDown,
   Video,
   SlidersHorizontal,
-  Trash2,
+  History,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -28,6 +30,16 @@ const navigation = [
     name: 'Creators',
     href: '/creators',
     icon: Users,
+  },
+  {
+    name: 'Partners',
+    href: '/partners',
+    icon: Handshake,
+  },
+  {
+    name: 'Payouts',
+    href: '/payouts',
+    icon: Receipt,
   },
   {
     name: 'Creator Videos',
@@ -63,9 +75,9 @@ const settingsNavigation = [
     icon: SlidersHorizontal,
   },
   {
-    name: 'Manage Imports',
+    name: 'Import History',
     href: '/settings/imports',
-    icon: Trash2,
+    icon: History,
   },
 ]
 
@@ -80,7 +92,7 @@ export function Sidebar() {
       {/* Logo */}
       <div className="flex h-16 items-center border-b px-6">
         <Link href="/dashboard" className="flex items-center gap-2">
-          <Film className="h-6 w-6 text-sidebar-primary" />
+          <img src="https://cdn.buttercms.com/WiHAVq7ZTXmyInEzFpFR" alt="Logo" className="h-6 w-6" />
           <span className="font-semibold text-sidebar-foreground">
             Creative Tracker
           </span>

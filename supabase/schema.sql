@@ -380,3 +380,223 @@ create policy "Authenticated users can read platform_adjustments" on platform_ad
 drop policy if exists "Authenticated users can update platform_adjustments" on platform_adjustments;
 create policy "Authenticated users can update platform_adjustments" on platform_adjustments
   for update using (auth.role() = 'authenticated');
+
+-- Partner rate type enum
+create type partner_rate_type_enum as enum ('per_video', 'per_month');
+
+-- Partners table (Creators with fixed rate contracts)
+create table if not exists partners (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null,
+  handle text not null,
+  social_links jsonb default '{}',
+  payout_method payout_method_enum,
+  payout_username text,
+  rate numeric(12,2) not null default 0,
+  rate_type partner_rate_type_enum not null default 'per_video',
+  contract_start_date date,
+  contract_end_date date,
+  email text,
+  phone_number text,
+  notes text,
+  converted_from_creator_id uuid references creators(id) on delete set null,
+  created_at timestamp with time zone default now(),
+  updated_at timestamp with time zone default now()
+);
+
+-- Partner patterns (for ad matching, same as creators)
+create table if not exists partner_patterns (
+  id uuid primary key default uuid_generate_v4(),
+  partner_id uuid references partners(id) on delete cascade,
+  pattern text not null,
+  created_at timestamp with time zone default now()
+);
+
+-- Indexes for partners
+create index if not exists idx_partners_contract_dates on partners(contract_start_date, contract_end_date);
+create index if not exists idx_partner_patterns_pattern on partner_patterns(pattern);
+create index if not exists idx_partner_patterns_partner on partner_patterns(partner_id);
+
+-- Trigger for updated_at on partners
+drop trigger if exists update_partners_updated_at on partners;
+create trigger update_partners_updated_at
+  before update on partners
+  for each row execute function update_updated_at_column();
+
+-- RLS for partners
+alter table partners enable row level security;
+alter table partner_patterns enable row level security;
+
+-- Policies for partners
+drop policy if exists "Authenticated users can read all partners" on partners;
+drop policy if exists "Authenticated users can insert partners" on partners;
+drop policy if exists "Authenticated users can update partners" on partners;
+drop policy if exists "Authenticated users can delete partners" on partners;
+
+create policy "Authenticated users can read all partners" on partners
+  for select using (auth.role() = 'authenticated');
+
+create policy "Authenticated users can insert partners" on partners
+  for insert with check (auth.role() = 'authenticated');
+
+create policy "Authenticated users can update partners" on partners
+  for update using (auth.role() = 'authenticated');
+
+create policy "Authenticated users can delete partners" on partners
+  for delete using (auth.role() = 'authenticated');
+
+-- Policies for partner_patterns
+drop policy if exists "Authenticated users can read all partner_patterns" on partner_patterns;
+drop policy if exists "Authenticated users can insert partner_patterns" on partner_patterns;
+drop policy if exists "Authenticated users can update partner_patterns" on partner_patterns;
+drop policy if exists "Authenticated users can delete partner_patterns" on partner_patterns;
+
+create policy "Authenticated users can read all partner_patterns" on partner_patterns
+  for select using (auth.role() = 'authenticated');
+
+create policy "Authenticated users can insert partner_patterns" on partner_patterns
+  for insert with check (auth.role() = 'authenticated');
+
+create policy "Authenticated users can update partner_patterns" on partner_patterns
+  for update using (auth.role() = 'authenticated');
+
+create policy "Authenticated users can delete partner_patterns" on partner_patterns
+  for delete using (auth.role() = 'authenticated');
+
+-- View for ads with partner matching (similar to ads_with_creators)
+create or replace view ads_with_partners as
+select
+  ap.*,
+  p.partner_id,
+  p.partner_name,
+  p.partner_handle,
+  s.name as sport_name,
+  COALESCE(pa.conversion_discount, 1.0) as platform_multiplier,
+  ap.conversions * COALESCE(pa.conversion_discount, 1.0) as adjusted_conversions,
+  ap.conversion_value * COALESCE(pa.conversion_discount, 1.0) as adjusted_conversion_value
+from ad_performance ap
+left join lateral (
+  select pp.partner_id, pr.name as partner_name, pr.handle as partner_handle
+  from partner_patterns pp
+  join partners pr on pp.partner_id = pr.id
+  where ap.ad_name ilike '%' || pp.pattern || '%'
+  limit 1
+) p on true
+left join sports s on ap.sport_id = s.id
+left join platform_adjustments pa on ap.platform = pa.platform;
+
+-- Grant access to the partners view
+grant select on ads_with_partners to authenticated;
+
+-- Payout status enum
+create type payout_status_enum as enum ('paid', 'unpaid');
+
+-- Payouts table (invoice-like records for creator payouts)
+create table if not exists payouts (
+  id uuid primary key default uuid_generate_v4(),
+  creator_id uuid references creators(id) on delete cascade not null,
+  payout_method payout_method_enum,
+  payout_username text,
+  date_start date not null,
+  date_end date not null,
+  amount numeric(12,2) not null,
+  status payout_status_enum not null default 'unpaid',
+  paid_at timestamp with time zone,
+  created_at timestamp with time zone default now(),
+  updated_at timestamp with time zone default now()
+);
+
+-- Index for payouts
+create index if not exists idx_payouts_creator on payouts(creator_id);
+create index if not exists idx_payouts_status on payouts(status);
+create index if not exists idx_payouts_dates on payouts(date_start, date_end);
+create index if not exists idx_payouts_paid_at on payouts(paid_at);
+
+-- Trigger for updated_at on payouts
+drop trigger if exists update_payouts_updated_at on payouts;
+create trigger update_payouts_updated_at
+  before update on payouts
+  for each row execute function update_updated_at_column();
+
+-- RLS for payouts
+alter table payouts enable row level security;
+
+-- Policies for payouts
+drop policy if exists "Authenticated users can read all payouts" on payouts;
+drop policy if exists "Authenticated users can insert payouts" on payouts;
+drop policy if exists "Authenticated users can update payouts" on payouts;
+drop policy if exists "Authenticated users can delete payouts" on payouts;
+
+create policy "Authenticated users can read all payouts" on payouts
+  for select using (auth.role() = 'authenticated');
+
+create policy "Authenticated users can insert payouts" on payouts
+  for insert with check (auth.role() = 'authenticated');
+
+create policy "Authenticated users can update payouts" on payouts
+  for update using (auth.role() = 'authenticated');
+
+-- Only admin can delete payouts (enforced at app level)
+create policy "Authenticated users can delete payouts" on payouts
+  for delete using (auth.role() = 'authenticated');
+
+-- Function to check for overlapping payout date ranges
+create or replace function check_payout_overlap(
+  p_creator_id uuid,
+  p_date_start date,
+  p_date_end date,
+  p_exclude_id uuid default null
+) returns boolean as $$
+begin
+  return exists (
+    select 1 from payouts
+    where creator_id = p_creator_id
+      and (p_exclude_id is null or id != p_exclude_id)
+      and date_start <= p_date_end
+      and date_end >= p_date_start
+  );
+end;
+$$ language plpgsql;
+
+-- Import logs table (for tracking and rolling back data imports)
+create table if not exists import_logs (
+  id uuid primary key default uuid_generate_v4(),
+  file_name text not null,
+  platform platform_enum not null,
+  record_count integer not null default 0,
+  date_range_start date,
+  date_range_end date,
+  imported_by text,
+  status text not null default 'completed', -- 'completed', 'rolled_back'
+  rolled_back_at timestamp with time zone,
+  rolled_back_by text,
+  created_at timestamp with time zone default now()
+);
+
+-- Add import_id to ad_performance to track which import created each record
+alter table ad_performance add column if not exists import_id uuid references import_logs(id) on delete set null;
+
+-- Index for import lookups
+create index if not exists idx_ad_performance_import on ad_performance(import_id);
+create index if not exists idx_import_logs_created on import_logs(created_at desc);
+create index if not exists idx_import_logs_status on import_logs(status);
+
+-- RLS for import_logs
+alter table import_logs enable row level security;
+
+drop policy if exists "Authenticated users can read all import_logs" on import_logs;
+drop policy if exists "Authenticated users can insert import_logs" on import_logs;
+drop policy if exists "Authenticated users can update import_logs" on import_logs;
+drop policy if exists "Authenticated users can delete import_logs" on import_logs;
+
+create policy "Authenticated users can read all import_logs" on import_logs
+  for select using (auth.role() = 'authenticated');
+
+create policy "Authenticated users can insert import_logs" on import_logs
+  for insert with check (auth.role() = 'authenticated');
+
+create policy "Authenticated users can update import_logs" on import_logs
+  for update using (auth.role() = 'authenticated');
+
+create policy "Authenticated users can delete import_logs" on import_logs
+  for delete using (auth.role() = 'authenticated');

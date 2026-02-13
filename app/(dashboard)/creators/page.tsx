@@ -2,22 +2,25 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { format } from 'date-fns'
-import { DateRange } from 'react-day-picker'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { DateRangePicker, getDefaultDateRange } from '@/components/dashboard/DateRangePicker'
+import { DateRangePicker } from '@/components/dashboard/DateRangePicker'
+import { useDateRange } from '@/lib/date-context'
 import { FilterBar } from '@/components/dashboard/FilterBar'
 import { CreatorTable } from '@/components/creators/CreatorTable'
 import { usePlatformAdjustments } from '@/hooks/usePlatformAdjustments'
 import { aggregatePerformance } from '@/lib/calculations'
-import { Plus, Download } from 'lucide-react'
+import { Plus, Download, Receipt } from 'lucide-react'
 import type { Platform, Sport, Creator, CreatorPattern, AdPerformance, CreatorWithPerformance } from '@/lib/types'
 
 export default function CreatorsPage() {
-  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => getDefaultDateRange())
+  const router = useRouter()
+  const { dateRange, setDateRange } = useDateRange()
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>([])
   const [selectedSports, setSelectedSports] = useState<string[]>([])
+  const [selectedCreators, setSelectedCreators] = useState<string[]>([])
 
   const [sports, setSports] = useState<Sport[]>([])
   const [creators, setCreators] = useState<Creator[]>([])
@@ -26,6 +29,8 @@ export default function CreatorsPage() {
   const [loading, setLoading] = useState(true)
   const [sortField, setSortField] = useState('payout')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
+  const [generatingPayout, setGeneratingPayout] = useState(false)
+  const [payoutError, setPayoutError] = useState<string | null>(null)
 
   const supabase = createClient()
 
@@ -177,6 +182,12 @@ export default function CreatorsPage() {
     })
   }, [creatorsWithPerformance, sortField, sortDirection])
 
+  // Filter creators by selection
+  const filteredCreators = useMemo(() => {
+    if (selectedCreators.length === 0) return sortedCreators
+    return sortedCreators.filter((c) => selectedCreators.includes(c.id))
+  }, [sortedCreators, selectedCreators])
+
   const handleSort = (field: string) => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
@@ -192,7 +203,7 @@ export default function CreatorsPage() {
       : 'all_time'
 
     const headers = ['Creator Name', 'Handle', 'Date Range', 'GMV', 'Revenue', 'Payout Amount']
-    const rows = sortedCreators.map((c) => [
+    const rows = filteredCreators.map((c) => [
       c.name,
       `@${c.handle}`,
       dateLabel.replace(/_/g, ' '),
@@ -209,6 +220,77 @@ export default function CreatorsPage() {
     a.download = `creator_payouts_${dateLabel}.csv`
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  // Check if Generate Payout button should be enabled
+  const canGeneratePayout = selectedCreators.length === 1 && dateRange?.from && dateRange?.to
+
+  // Get selected creator's payout amount
+  const selectedCreatorPayout = useMemo(() => {
+    if (selectedCreators.length !== 1) return 0
+    const creator = creatorsWithPerformance.find(c => c.id === selectedCreators[0])
+    return creator?.performance.payout || 0
+  }, [selectedCreators, creatorsWithPerformance])
+
+  const handleGeneratePayout = async () => {
+    if (!canGeneratePayout || !dateRange?.from || !dateRange?.to) return
+
+    setGeneratingPayout(true)
+    setPayoutError(null)
+
+    const creatorId = selectedCreators[0]
+    const creator = creators.find(c => c.id === creatorId)
+    if (!creator) {
+      setPayoutError('Creator not found')
+      setGeneratingPayout(false)
+      return
+    }
+
+    const dateStart = format(dateRange.from, 'yyyy-MM-dd')
+    const dateEnd = format(dateRange.to, 'yyyy-MM-dd')
+
+    try {
+      // Check for overlapping payouts
+      const { data: existingPayouts, error: checkError } = await supabase
+        .from('payouts')
+        .select('id, date_start, date_end')
+        .eq('creator_id', creatorId)
+        .lte('date_start', dateEnd)
+        .gte('date_end', dateStart)
+
+      if (checkError) throw checkError
+
+      if (existingPayouts && existingPayouts.length > 0) {
+        const overlap = existingPayouts[0]
+        setPayoutError(
+          `A payout already exists for ${creator.name} with overlapping dates (${overlap.date_start} to ${overlap.date_end}). Please choose a different date range.`
+        )
+        setGeneratingPayout(false)
+        return
+      }
+
+      // Create the payout
+      const { error: insertError } = await supabase
+        .from('payouts')
+        .insert({
+          creator_id: creatorId,
+          payout_method: creator.payout_method,
+          payout_username: creator.payout_username,
+          date_start: dateStart,
+          date_end: dateEnd,
+          amount: selectedCreatorPayout,
+          status: 'unpaid',
+        })
+
+      if (insertError) throw insertError
+
+      // Navigate to payouts page
+      router.push('/payouts')
+    } catch (err) {
+      setPayoutError(err instanceof Error ? err.message : 'Failed to generate payout')
+    } finally {
+      setGeneratingPayout(false)
+    }
   }
 
   return (
@@ -234,19 +316,41 @@ export default function CreatorsPage() {
         </div>
       </div>
 
+      {/* Error message */}
+      {payoutError && (
+        <div className="rounded-md bg-destructive/10 p-4 text-destructive text-sm">
+          {payoutError}
+        </div>
+      )}
+
       {/* Filters */}
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <FilterBar
-          platforms={['meta', 'tiktok', 'google']}
-          selectedPlatforms={selectedPlatforms}
-          onPlatformsChange={setSelectedPlatforms}
-          sports={sports}
-          selectedSports={selectedSports}
-          onSportsChange={setSelectedSports}
-          creators={[]}
-          selectedCreators={[]}
-          onCreatorsChange={() => {}}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <FilterBar
+            platforms={['meta', 'tiktok', 'google']}
+            selectedPlatforms={selectedPlatforms}
+            onPlatformsChange={setSelectedPlatforms}
+            sports={sports}
+            selectedSports={selectedSports}
+            onSportsChange={setSelectedSports}
+            creators={creators}
+            selectedCreators={selectedCreators}
+            onCreatorsChange={setSelectedCreators}
+          />
+          <Button
+            onClick={handleGeneratePayout}
+            disabled={!canGeneratePayout || generatingPayout}
+            className="h-8"
+            style={{
+              backgroundColor: canGeneratePayout ? '#4E695D' : undefined,
+              borderColor: canGeneratePayout ? '#4E695D' : undefined,
+            }}
+            variant={canGeneratePayout ? 'default' : 'outline'}
+          >
+            <Receipt className="mr-1 h-3 w-3" />
+            {generatingPayout ? 'Generating...' : 'Generate Payout'}
+          </Button>
+        </div>
         <DateRangePicker
           dateRange={dateRange}
           onDateRangeChange={setDateRange}
@@ -255,7 +359,7 @@ export default function CreatorsPage() {
 
       {/* Creator Table */}
       <CreatorTable
-        creators={sortedCreators}
+        creators={filteredCreators}
         loading={loading}
         sortField={sortField}
         sortDirection={sortDirection}

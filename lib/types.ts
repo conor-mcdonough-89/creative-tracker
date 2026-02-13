@@ -10,6 +10,36 @@ export type AdStatus = 'not_running' | 'running' | 'completed' | 'unknown'
 // Payout method for creators
 export type PayoutMethod = 'venmo' | 'gusto' | 'sidelineswap' | 'zelle'
 
+// Partner rate type
+export type PartnerRateType = 'per_video' | 'per_month'
+
+// Partner status (computed based on contract dates)
+export type PartnerStatus = 'prospect' | 'active' | 'ended'
+
+// Payout status
+export type PayoutStatus = 'paid' | 'unpaid'
+
+// Payout (invoice-like record for creator payouts)
+export interface Payout {
+  id: string
+  creator_id: string
+  payout_method: PayoutMethod | null
+  payout_username: string | null
+  date_start: string
+  date_end: string
+  amount: number
+  status: PayoutStatus
+  paid_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+// Payout with creator info
+export interface PayoutWithCreator extends Payout {
+  creator_name: string
+  creator_handle: string
+}
+
 // Sports
 export interface Sport {
   id: string
@@ -50,6 +80,50 @@ export interface CreatorPattern {
   creator_id: string
   pattern: string
   created_at: string
+}
+
+// Partner (fixed-rate creator)
+export interface Partner {
+  id: string
+  name: string
+  handle: string
+  social_links: {
+    tiktok?: string
+    instagram?: string
+    youtube?: string
+    twitter?: string
+    [key: string]: string | undefined
+  }
+  payout_method: PayoutMethod | null
+  payout_username: string | null
+  rate: number
+  rate_type: PartnerRateType
+  contract_start_date: string | null
+  contract_end_date: string | null
+  email: string | null
+  phone_number: string | null
+  notes: string | null
+  converted_from_creator_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+// Partner pattern for ad matching
+export interface PartnerPattern {
+  id: string
+  partner_id: string
+  pattern: string
+  created_at: string
+}
+
+// Partner with aggregated performance and computed status
+export interface PartnerWithPerformance extends Partner {
+  performance: AggregatedPerformance
+  sports: Sport[]
+  matched_ads_count: number
+  status: PartnerStatus
+  video_count: number // for per_video rate calculation
+  calculated_payout: number // rate * video_count or rate (for monthly)
 }
 
 // Creator video (raw video tracking)
@@ -252,3 +326,21 @@ export const DEFAULT_SPORTS = [
   'Tennis',
   'Other',
 ] as const
+
+// Import log status
+export type ImportStatus = 'completed' | 'rolled_back'
+
+// Import log (for tracking and rolling back data imports)
+export interface ImportLog {
+  id: string
+  file_name: string
+  platform: Platform
+  record_count: number
+  date_range_start: string | null
+  date_range_end: string | null
+  imported_by: string | null
+  status: ImportStatus
+  rolled_back_at: string | null
+  rolled_back_by: string | null
+  created_at: string
+}

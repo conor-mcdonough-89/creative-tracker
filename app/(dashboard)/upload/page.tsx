@@ -168,6 +168,10 @@ export default function UploadPage() {
     setError(null)
 
     try {
+      // Get current user email for logging
+      const { data: { user } } = await supabase.auth.getUser()
+      const userEmail = user?.email || null
+
       // Transform CSV data to match our schema
       const records = csvData.map((row) => {
         const parseNumber = (value: string): number => {
@@ -177,12 +181,15 @@ export default function UploadPage() {
         }
 
         const parseDate = (value: string): string => {
+          if (!value || value.trim() === '' || value.trim() === '-') {
+            return ''
+          }
           // Try to parse various date formats
           const date = new Date(value)
           if (!isNaN(date.getTime())) {
             return date.toISOString().split('T')[0]
           }
-          return value
+          return ''
         }
 
         const adName = row[mappings.ad_name] || ''
@@ -210,15 +217,59 @@ export default function UploadPage() {
         }
       }).filter((record) => record.ad_name && record.date)
 
+      // Deduplicate records by ad_name + platform + date (keep last occurrence)
+      const deduped = Array.from(
+        records.reduce((map, record) => {
+          const key = `${record.ad_name}|${record.platform}|${record.date}`
+          map.set(key, record)
+          return map
+        }, new Map()).values()
+      ) as typeof records
+
+      // Calculate date range from records
+      const dates = deduped.map(r => r.date).filter(Boolean).sort()
+      const dateRangeStart = dates[0] || null
+      const dateRangeEnd = dates[dates.length - 1] || null
+
+      // Create import log first
+      const { data: importLog, error: importLogError } = await supabase
+        .from('import_logs')
+        .insert({
+          file_name: file?.name || 'unknown',
+          platform,
+          record_count: deduped.length,
+          date_range_start: dateRangeStart,
+          date_range_end: dateRangeEnd,
+          imported_by: userEmail,
+          status: 'completed',
+        })
+        .select()
+        .single()
+
+      if (importLogError) {
+        throw new Error(`Failed to create import log: ${importLogError.message}`)
+      }
+
+      // Add import_id to all records
+      const recordsWithImportId = deduped.map(record => ({
+        ...record,
+        import_id: importLog.id,
+      }))
+
       // Upsert data
       const { error: uploadError } = await supabase
         .from('ad_performance')
-        .upsert(records, {
+        .upsert(recordsWithImportId, {
           onConflict: 'ad_name,platform,date',
           ignoreDuplicates: false,
         })
 
       if (uploadError) {
+        // If upload fails, mark import log as failed
+        await supabase
+          .from('import_logs')
+          .delete()
+          .eq('id', importLog.id)
         throw new Error(uploadError.message)
       }
 

@@ -32,51 +32,60 @@ import { useDateRange } from '@/lib/date-context'
 import { GranularityToggle } from '@/components/dashboard/GranularityToggle'
 import { TimeSeriesChart } from '@/components/dashboard/TimeSeriesChart'
 import { PlatformBreakdownChart } from '@/components/dashboard/PlatformBreakdownChart'
-import { PayoutCalculator } from '@/components/creators/PayoutCalculator'
+import { PartnerPayoutCalculator } from '@/components/partners/PartnerPayoutCalculator'
 import {
   formatCurrency,
   formatCompactNumber,
   aggregatePerformance,
+  getPartnerStatus,
+  calculateMonthsInRange,
 } from '@/lib/calculations'
-import { Edit, Trash2, ExternalLink, UserPlus } from 'lucide-react'
-import type { Creator, CreatorPattern, AdPerformance, Sport, Platform, Granularity } from '@/lib/types'
+import { Edit, Trash2, ExternalLink, Calendar } from 'lucide-react'
+import type { Partner, PartnerPattern, AdPerformance, Sport, Platform, Granularity, CreatorVideo, PartnerStatus } from '@/lib/types'
 import { parseISO, startOfWeek, startOfMonth } from 'date-fns'
 
-export default function CreatorDetailPage() {
+const STATUS_BADGES: Record<PartnerStatus, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
+  prospect: { label: 'Prospect', variant: 'secondary' },
+  active: { label: 'Active', variant: 'default' },
+  ended: { label: 'Ended', variant: 'outline' },
+}
+
+export default function PartnerDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const creatorId = params.id as string
+  const partnerId = params.id as string
 
   const { dateRange, setDateRange } = useDateRange()
   const [granularity, setGranularity] = useState<Granularity>('daily')
 
-  const [creator, setCreator] = useState<Creator | null>(null)
-  const [patterns, setPatterns] = useState<CreatorPattern[]>([])
+  const [partner, setPartner] = useState<Partner | null>(null)
+  const [patterns, setPatterns] = useState<PartnerPattern[]>([])
   const [performanceData, setPerformanceData] = useState<AdPerformance[]>([])
+  const [videos, setVideos] = useState<CreatorVideo[]>([])
   const [sports, setSports] = useState<Sport[]>([])
   const [loading, setLoading] = useState(true)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [convertDialogOpen, setConvertDialogOpen] = useState(false)
-  const [converting, setConverting] = useState(false)
 
   const supabase = createClient()
 
-  // Load creator and patterns
+  // Load partner and patterns
   useEffect(() => {
-    const loadCreator = async () => {
-      const [creatorRes, patternsRes, sportsRes] = await Promise.all([
-        supabase.from('creators').select('*').eq('id', creatorId).single(),
-        supabase.from('creator_patterns').select('*').eq('creator_id', creatorId),
+    const loadPartner = async () => {
+      const [partnerRes, patternsRes, sportsRes, videosRes] = await Promise.all([
+        supabase.from('partners').select('*').eq('id', partnerId).single(),
+        supabase.from('partner_patterns').select('*').eq('partner_id', partnerId),
         supabase.from('sports').select('*').order('name'),
+        supabase.from('creator_videos').select('*'),
       ])
 
-      if (creatorRes.data) setCreator(creatorRes.data as Creator)
-      if (patternsRes.data) setPatterns(patternsRes.data as CreatorPattern[])
+      if (partnerRes.data) setPartner(partnerRes.data as Partner)
+      if (patternsRes.data) setPatterns(patternsRes.data as PartnerPattern[])
       if (sportsRes.data) setSports(sportsRes.data as Sport[])
+      if (videosRes.data) setVideos(videosRes.data as CreatorVideo[])
     }
-    loadCreator()
-  }, [supabase, creatorId])
+    loadPartner()
+  }, [supabase, partnerId])
 
   // Load performance data
   useEffect(() => {
@@ -204,67 +213,39 @@ export default function CreatorDetailPage() {
     return Array.from(adMap.values())
   }, [performanceData])
 
-  // Creator sports (derived from matched ads)
-  const creatorSports = useMemo(() => {
+  // Partner sports (derived from matched ads)
+  const partnerSports = useMemo(() => {
     const sportIds = [...new Set(performanceData.map((ad) => ad.sport_id).filter(Boolean))]
     return sports.filter((s) => sportIds.includes(s.id))
   }, [performanceData, sports])
 
+  // Partner status
+  const status = useMemo(() => {
+    if (!partner) return 'prospect'
+    return getPartnerStatus(partner.contract_start_date, partner.contract_end_date)
+  }, [partner])
+
+  // Video count for this partner
+  const videoCount = useMemo(() => {
+    if (!partner) return 0
+    return videos.filter(v => v.creator_id === partner.converted_from_creator_id).length
+  }, [partner, videos])
+
+  // Months in date range
+  const monthsInRange = useMemo(() => {
+    if (!dateRange?.from || !dateRange?.to) return 1
+    return calculateMonthsInRange(dateRange.from, dateRange.to)
+  }, [dateRange])
+
   const handleDelete = async () => {
     setDeleting(true)
     try {
-      await supabase.from('creators').delete().eq('id', creatorId)
-      router.push('/creators')
+      await supabase.from('partners').delete().eq('id', partnerId)
+      router.push('/partners')
     } catch (err) {
-      console.error('Failed to delete creator:', err)
+      console.error('Failed to delete partner:', err)
     } finally {
       setDeleting(false)
-    }
-  }
-
-  const handleConvertToPartner = async () => {
-    if (!creator) return
-    setConverting(true)
-    try {
-      // Create partner from creator data
-      const { data: partnerData, error: partnerError } = await supabase
-        .from('partners')
-        .insert({
-          name: creator.name,
-          handle: creator.handle,
-          social_links: creator.social_links,
-          payout_method: creator.payout_method,
-          payout_username: creator.payout_username,
-          notes: creator.notes,
-          rate: 0, // Default rate, user will set in edit
-          rate_type: 'per_video',
-          converted_from_creator_id: creator.id,
-        })
-        .select()
-        .single()
-
-      if (partnerError) throw partnerError
-
-      // Copy patterns to partner_patterns
-      if (patterns.length > 0) {
-        const { error: patternsError } = await supabase
-          .from('partner_patterns')
-          .insert(
-            patterns.map((pattern) => ({
-              partner_id: partnerData.id,
-              pattern: pattern.pattern,
-            }))
-          )
-
-        if (patternsError) throw patternsError
-      }
-
-      // Navigate to the new partner's edit page to set rate and contract details
-      router.push(`/partners/${partnerData.id}/edit`)
-    } catch (err) {
-      console.error('Failed to convert to partner:', err)
-    } finally {
-      setConverting(false)
     }
   }
 
@@ -272,61 +253,42 @@ export default function CreatorDetailPage() {
     ? `${format(dateRange.from, 'MMM d, yyyy')} - ${format(dateRange.to, 'MMM d, yyyy')}`
     : 'All time'
 
-  if (!creator && !loading) {
+  if (!partner && !loading) {
     return (
       <div className="flex flex-col items-center justify-center py-12">
-        <h2 className="text-xl font-semibold">Creator not found</h2>
+        <h2 className="text-xl font-semibold">Partner not found</h2>
         <Button asChild className="mt-4">
-          <Link href="/creators">Back to Creators</Link>
+          <Link href="/partners">Back to Partners</Link>
         </Button>
       </div>
     )
   }
+
+  const statusBadge = STATUS_BADGES[status]
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="space-y-1">
-          {loading && !creator ? (
+          {loading && !partner ? (
             <>
               <Skeleton className="h-8 w-48" />
               <Skeleton className="h-4 w-32" />
             </>
           ) : (
             <>
-              <h1 className="text-3xl font-bold tracking-tight">{creator?.name}</h1>
-              <p className="text-muted-foreground">@{creator?.handle}</p>
+              <div className="flex items-center gap-3">
+                <h1 className="text-3xl font-bold tracking-tight">{partner?.name}</h1>
+                <Badge variant={statusBadge.variant}>{statusBadge.label}</Badge>
+              </div>
+              <p className="text-muted-foreground">@{partner?.handle}</p>
             </>
           )}
         </div>
         <div className="flex gap-2">
-          <Dialog open={convertDialogOpen} onOpenChange={setConvertDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline">
-                <UserPlus className="mr-2 h-4 w-4" />
-                Convert to Partner
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Convert to Partner</DialogTitle>
-                <DialogDescription>
-                  This will create a new Partner record from {creator?.name}&apos;s data. You&apos;ll be able to set the rate and contract details on the next page. The original Creator record will remain unchanged.
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setConvertDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={handleConvertToPartner} disabled={converting}>
-                  {converting ? 'Converting...' : 'Convert to Partner'}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
           <Button variant="outline" asChild>
-            <Link href={`/creators/${creatorId}/edit`}>
+            <Link href={`/partners/${partnerId}/edit`}>
               <Edit className="mr-2 h-4 w-4" />
               Edit
             </Link>
@@ -340,9 +302,9 @@ export default function CreatorDetailPage() {
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Delete Creator</DialogTitle>
+                <DialogTitle>Delete Partner</DialogTitle>
                 <DialogDescription>
-                  Are you sure you want to delete {creator?.name}? This action cannot be undone.
+                  Are you sure you want to delete {partner?.name}? This action cannot be undone.
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter>
@@ -362,11 +324,73 @@ export default function CreatorDetailPage() {
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader>
+            <CardTitle className="text-base">Contract Details</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <div>
+              <p className="text-xs text-muted-foreground">Rate</p>
+              <p className="text-sm font-medium">
+                {formatCurrency(partner?.rate || 0)} / {partner?.rate_type === 'per_video' ? 'video' : 'month'}
+              </p>
+            </div>
+            {partner?.contract_start_date && (
+              <div>
+                <p className="text-xs text-muted-foreground">Start Date</p>
+                <p className="text-sm font-medium flex items-center gap-1">
+                  <Calendar className="h-3 w-3" />
+                  {format(new Date(partner.contract_start_date), 'MMM d, yyyy')}
+                </p>
+              </div>
+            )}
+            {partner?.contract_end_date && (
+              <div>
+                <p className="text-xs text-muted-foreground">End Date</p>
+                <p className="text-sm font-medium flex items-center gap-1">
+                  <Calendar className="h-3 w-3" />
+                  {format(new Date(partner.contract_end_date), 'MMM d, yyyy')}
+                </p>
+              </div>
+            )}
+            {!partner?.contract_start_date && !partner?.contract_end_date && (
+              <p className="text-sm text-muted-foreground">No contract dates set</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Contact Info</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {partner?.email && (
+              <div>
+                <p className="text-xs text-muted-foreground">Email</p>
+                <a href={`mailto:${partner.email}`} className="text-sm text-primary hover:underline">
+                  {partner.email}
+                </a>
+              </div>
+            )}
+            {partner?.phone_number && (
+              <div>
+                <p className="text-xs text-muted-foreground">Phone</p>
+                <a href={`tel:${partner.phone_number}`} className="text-sm text-primary hover:underline">
+                  {partner.phone_number}
+                </a>
+              </div>
+            )}
+            {!partner?.email && !partner?.phone_number && (
+              <p className="text-sm text-muted-foreground">No contact info</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
             <CardTitle className="text-base">Social Links</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {creator?.social_links && Object.entries(creator.social_links).length > 0 ? (
-              Object.entries(creator.social_links)
+            {partner?.social_links && Object.entries(partner.social_links).length > 0 ? (
+              Object.entries(partner.social_links)
                 .filter(([, url]) => url)
                 .map(([platform, url]) => (
                   <a
@@ -391,18 +415,18 @@ export default function CreatorDetailPage() {
             <CardTitle className="text-base">Payout Information</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {creator?.payout_method ? (
+            {partner?.payout_method ? (
               <>
                 <div>
                   <p className="text-xs text-muted-foreground">Method</p>
                   <p className="text-sm font-medium capitalize">
-                    {creator.payout_method === 'sidelineswap' ? 'SidelineSwap' : creator.payout_method}
+                    {partner.payout_method === 'sidelineswap' ? 'SidelineSwap' : partner.payout_method}
                   </p>
                 </div>
-                {creator.payout_username && (
+                {partner.payout_username && (
                   <div>
                     <p className="text-xs text-muted-foreground">Username</p>
-                    <p className="text-sm font-medium">{creator.payout_username}</p>
+                    <p className="text-sm font-medium">{partner.payout_username}</p>
                   </div>
                 )}
               </>
@@ -411,15 +435,18 @@ export default function CreatorDetailPage() {
             )}
           </CardContent>
         </Card>
+      </div>
 
+      {/* Notes and Sports */}
+      <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Sports</CardTitle>
           </CardHeader>
           <CardContent>
-            {creatorSports.length > 0 ? (
+            {partnerSports.length > 0 ? (
               <div className="flex flex-wrap gap-2">
-                {creatorSports.map((sport) => (
+                {partnerSports.map((sport) => (
                   <Badge key={sport.id} variant="secondary">
                     {sport.name}
                   </Badge>
@@ -437,14 +464,22 @@ export default function CreatorDetailPage() {
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              {creator?.notes || 'No notes'}
+              {partner?.notes || 'No notes'}
             </p>
           </CardContent>
         </Card>
       </div>
 
       {/* Payout Calculator */}
-      <PayoutCalculator gmv={metrics.gmv} dateRangeLabel={dateRangeLabel} />
+      {partner && (
+        <PartnerPayoutCalculator
+          rate={partner.rate}
+          rateType={partner.rate_type}
+          videoCount={videoCount}
+          monthsInRange={monthsInRange}
+          dateRangeLabel={dateRangeLabel}
+        />
+      )}
 
       {/* Date Range and Granularity */}
       <div className="flex items-center justify-between">
