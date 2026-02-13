@@ -156,8 +156,8 @@ export function VideoDialog({ open, onClose, video, sports, creators }: VideoDia
 
   return (
     <Dialog open={open} onOpenChange={() => onClose()}>
-      <DialogContent className="sm:max-w-[500px]">
-        <form onSubmit={handleSubmit}>
+      <DialogContent className="sm:max-w-[500px] max-h-[85vh] flex flex-col">
+        <form onSubmit={handleSubmit} className="flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle>{video ? 'Edit Video' : 'Add Video'}</DialogTitle>
             <DialogDescription>
@@ -166,12 +166,12 @@ export function VideoDialog({ open, onClose, video, sports, creators }: VideoDia
           </DialogHeader>
 
           {error && (
-            <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+            <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive mt-2">
               {error}
             </div>
           )}
 
-          <div className="grid gap-4 py-4">
+          <div className="grid gap-4 py-4 overflow-y-auto flex-1 pr-2">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="creator">Creator</Label>
@@ -361,7 +361,7 @@ export function VideoDialog({ open, onClose, video, sports, creators }: VideoDia
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="pt-4 border-t mt-4">
             <Button type="button" variant="outline" onClick={() => onClose()}>
               Cancel
             </Button>
