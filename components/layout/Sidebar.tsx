@@ -14,6 +14,7 @@ import {
   ChevronDown,
   Video,
   SlidersHorizontal,
+  Trash2,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -60,6 +61,11 @@ const settingsNavigation = [
     name: 'Platform Adjustments',
     href: '/settings/adjustments',
     icon: SlidersHorizontal,
+  },
+  {
+    name: 'Manage Imports',
+    href: '/settings/imports',
+    icon: Trash2,
   },
 ]
 
