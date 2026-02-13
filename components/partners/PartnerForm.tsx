@@ -348,8 +348,7 @@ export function PartnerForm({ partner, mode, initialData }: PartnerFormProps) {
                 min="0"
                 value={rate}
                 onChange={(e) => setRate(e.target.value)}
-                placeholder="100.00"
-                required
+                placeholder="0.00"
               />
             </div>
             <div className="grid gap-2">
