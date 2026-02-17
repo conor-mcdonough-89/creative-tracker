@@ -600,3 +600,30 @@ create policy "Authenticated users can update import_logs" on import_logs
 
 create policy "Authenticated users can delete import_logs" on import_logs
   for delete using (auth.role() = 'authenticated');
+
+-- Dismissed unmapped ads (for hiding ads from the unmapped ads review list)
+create table if not exists dismissed_unmapped_ads (
+  id uuid primary key default uuid_generate_v4(),
+  ad_name text not null unique,
+  dismissed_by text,
+  created_at timestamp with time zone default now()
+);
+
+-- Index for fast lookup
+create index if not exists idx_dismissed_unmapped_ads_name on dismissed_unmapped_ads(ad_name);
+
+-- RLS for dismissed_unmapped_ads
+alter table dismissed_unmapped_ads enable row level security;
+
+drop policy if exists "Authenticated users can read all dismissed_unmapped_ads" on dismissed_unmapped_ads;
+drop policy if exists "Authenticated users can insert dismissed_unmapped_ads" on dismissed_unmapped_ads;
+drop policy if exists "Authenticated users can delete dismissed_unmapped_ads" on dismissed_unmapped_ads;
+
+create policy "Authenticated users can read all dismissed_unmapped_ads" on dismissed_unmapped_ads
+  for select using (auth.role() = 'authenticated');
+
+create policy "Authenticated users can insert dismissed_unmapped_ads" on dismissed_unmapped_ads
+  for insert with check (auth.role() = 'authenticated');
+
+create policy "Authenticated users can delete dismissed_unmapped_ads" on dismissed_unmapped_ads
+  for delete using (auth.role() = 'authenticated');

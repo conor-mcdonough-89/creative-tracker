@@ -344,3 +344,19 @@ export interface ImportLog {
   rolled_back_by: string | null
   created_at: string
 }
+
+// Dismissed unmapped ad
+export interface DismissedUnmappedAd {
+  id: string
+  ad_name: string
+  dismissed_by: string | null
+  created_at: string
+}
+
+// Unmapped ad with metadata (for review)
+export interface UnmappedAdReview {
+  ad_name: string
+  platform: Platform
+  first_seen: string
+  is_now_mapped: boolean
+}
