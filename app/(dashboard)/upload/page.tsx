@@ -17,6 +17,7 @@ import {
 import { ColumnMapper } from '@/components/upload/ColumnMapper'
 import { PresetSelector } from '@/components/upload/PresetSelector'
 import { DataPreview } from '@/components/upload/DataPreview'
+import { UnmappedAdsSection } from '@/components/upload/UnmappedAdsSection'
 import { Upload, FileText, CheckCircle2, AlertCircle, AlertTriangle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import type { Platform, ColumnPreset, CanonicalField, CSVRow, Sport } from '@/lib/types'
@@ -147,6 +148,42 @@ export default function UploadPage() {
 
     setPresets((prev) => [...prev, data as ColumnPreset])
     setSelectedPreset(data as ColumnPreset)
+  }
+
+  const handleUpdatePreset = async (presetId: string, newMappings: Record<string, string>) => {
+    const { data, error } = await supabase
+      .from('column_presets')
+      .update({ mappings: newMappings })
+      .eq('id', presetId)
+      .select()
+      .single()
+
+    if (error) {
+      setError(`Failed to update preset: ${error.message}`)
+      return
+    }
+
+    // Update the preset in local state
+    setPresets((prev) =>
+      prev.map((p) => (p.id === presetId ? (data as ColumnPreset) : p))
+    )
+    setSelectedPreset(data as ColumnPreset)
+  }
+
+  const handleDeletePreset = async (presetId: string) => {
+    const { error } = await supabase
+      .from('column_presets')
+      .delete()
+      .eq('id', presetId)
+
+    if (error) {
+      setError(`Failed to delete preset: ${error.message}`)
+      return
+    }
+
+    // Remove from local state and deselect
+    setPresets((prev) => prev.filter((p) => p.id !== presetId))
+    setSelectedPreset(null)
   }
 
   const validateMappings = (): boolean => {
@@ -470,6 +507,8 @@ export default function UploadPage() {
               selectedPreset={selectedPreset}
               onSelectPreset={handleSelectPreset}
               onSavePreset={handleSavePreset}
+              onUpdatePreset={handleUpdatePreset}
+              onDeletePreset={handleDeletePreset}
               currentMappings={mappings}
             />
 
@@ -609,6 +648,9 @@ export default function UploadPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Unmapped Ads Review Section */}
+      <UnmappedAdsSection />
     </div>
   )
 }
