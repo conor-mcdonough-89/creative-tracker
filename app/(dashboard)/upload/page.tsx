@@ -548,8 +548,8 @@ export default function UploadPage() {
 
             {/* Unmatched ads warning */}
             {uploadResult.unmatchedAds.length > 0 && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950">
-                <div className="flex items-start gap-3">
+              <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950">
+                <div className="flex items-start gap-3 p-4">
                   <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5" />
                   <div className="flex-1">
                     <h4 className="font-medium text-amber-800 dark:text-amber-200">
@@ -558,19 +558,25 @@ export default function UploadPage() {
                     <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
                       These ads won&apos;t appear in dashboards until you create creator patterns for them.
                     </p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {uploadResult.unmatchedAds.slice(0, 10).map((adName) => (
-                        <Badge key={adName} variant="outline" className="text-xs bg-white dark:bg-amber-900">
-                          {adName.length > 40 ? adName.slice(0, 40) + '...' : adName}
-                        </Badge>
-                      ))}
-                      {uploadResult.unmatchedAds.length > 10 && (
-                        <Badge variant="outline" className="text-xs bg-white dark:bg-amber-900">
-                          +{uploadResult.unmatchedAds.length - 10} more
-                        </Badge>
-                      )}
-                    </div>
                   </div>
+                </div>
+                <div className="border-t border-amber-200 dark:border-amber-900 max-h-64 overflow-y-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-amber-100/50 dark:bg-amber-900/50 sticky top-0">
+                      <tr>
+                        <th className="text-left px-4 py-2 font-medium text-amber-800 dark:text-amber-200">Ad Name</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-amber-200 dark:divide-amber-900">
+                      {uploadResult.unmatchedAds.map((adName, index) => (
+                        <tr key={index} className="hover:bg-amber-100/30 dark:hover:bg-amber-900/30">
+                          <td className="px-4 py-2 text-amber-900 dark:text-amber-100 font-mono text-xs break-all">
+                            {adName}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )}
