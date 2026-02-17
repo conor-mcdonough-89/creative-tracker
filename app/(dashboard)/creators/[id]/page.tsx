@@ -78,25 +78,23 @@ export default function CreatorDetailPage() {
     loadCreator()
   }, [supabase, creatorId])
 
-  // Load performance data
+  // Load performance data (use ads_with_creators view for proper matching)
   useEffect(() => {
     const loadPerformanceData = async () => {
-      if (!dateRange?.from || !dateRange?.to || patterns.length === 0) {
+      if (!dateRange?.from || !dateRange?.to || !creatorId) {
         setLoading(false)
         return
       }
 
       setLoading(true)
 
-      // Build query with pattern matching
-      const patternFilters = patterns.map((p) => `ad_name.ilike.%${p.pattern}%`)
-
+      // Query ads matched to this creator via the view
       const { data, error } = await supabase
-        .from('ad_performance')
+        .from('ads_with_creators')
         .select('*')
+        .eq('creator_id', creatorId)
         .gte('date', format(dateRange.from, 'yyyy-MM-dd'))
         .lte('date', format(dateRange.to, 'yyyy-MM-dd'))
-        .or(patternFilters.join(','))
         .order('date', { ascending: false })
 
       if (data && !error) {
@@ -106,7 +104,7 @@ export default function CreatorDetailPage() {
     }
 
     loadPerformanceData()
-  }, [supabase, dateRange, patterns])
+  }, [supabase, dateRange, creatorId])
 
   // Calculate metrics
   const metrics = useMemo(() => {
