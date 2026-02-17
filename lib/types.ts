@@ -360,3 +360,12 @@ export interface UnmappedAdReview {
   first_seen: string
   is_now_mapped: boolean
 }
+
+// Manual ad link
+export interface ManualAdLink {
+  id: string
+  ad_name: string
+  creator_id: string
+  linked_by: string | null
+  created_at: string
+}

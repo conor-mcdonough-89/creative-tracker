@@ -240,36 +240,47 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
 
--- View for ads with creator matching (using pattern matching and video captions)
+-- View for ads with creator matching (using manual links, pattern matching, and video captions)
 -- Includes platform-adjusted conversion values
--- Matching priority: 1) creator_patterns (substring), 2) creator_videos.caption (trimmed)
+-- Matching priority: 1) manual_ad_links (explicit), 2) creator_patterns (substring), 3) creator_videos.caption (normalized)
 create or replace view ads_with_creators as
 select
   ap.*,
-  COALESCE(c.creator_id, vc.creator_id) as creator_id,
-  COALESCE(c.creator_name, vc.creator_name) as creator_name,
-  COALESCE(c.creator_handle, vc.creator_handle) as creator_handle,
+  COALESCE(m.creator_id, c.creator_id, vc.creator_id) as creator_id,
+  COALESCE(m.creator_name, c.creator_name, vc.creator_name) as creator_name,
+  COALESCE(m.creator_handle, c.creator_handle, vc.creator_handle) as creator_handle,
   s.name as sport_name,
   COALESCE(pa.conversion_discount, 1.0) as platform_multiplier,
   ap.conversions * COALESCE(pa.conversion_discount, 1.0) as adjusted_conversions,
   ap.conversion_value * COALESCE(pa.conversion_discount, 1.0) as adjusted_conversion_value
 from ad_performance ap
--- First priority: pattern matching
+-- First priority: manual ad links (explicit user choice)
+left join lateral (
+  select mal.creator_id, cr.name as creator_name, cr.handle as creator_handle
+  from manual_ad_links mal
+  join creators cr on mal.creator_id = cr.id
+  where mal.ad_name = ap.ad_name
+  limit 1
+) m on true
+-- Second priority: pattern matching (only if manual link didn't match)
 left join lateral (
   select cp.creator_id, cr.name as creator_name, cr.handle as creator_handle
   from creator_patterns cp
   join creators cr on cp.creator_id = cr.id
-  where ap.ad_name ilike '%' || cp.pattern || '%'
+  where m.creator_id is null  -- Only try if manual link didn't match
+    and ap.ad_name ilike '%' || cp.pattern || '%'
   limit 1
 ) c on true
--- Second priority: video caption matching (trimmed match, only if pattern didn't match)
+-- Third priority: video caption matching (normalized, only if pattern didn't match)
+-- Strips emojis and non-ASCII characters, trims whitespace for robust matching
 left join lateral (
   select cv.creator_id, cr.name as creator_name, cr.handle as creator_handle
   from creator_videos cv
   join creators cr on cv.creator_id = cr.id
-  where c.creator_id is null  -- Only try if pattern match failed
+  where m.creator_id is null  -- Only try if manual link didn't match
+    and c.creator_id is null  -- Only try if pattern match failed
     and cv.caption is not null
-    and trim(ap.ad_name) = trim(cv.caption)
+    and regexp_replace(trim(ap.ad_name), '[^\x00-\x7F]+', '', 'g') = regexp_replace(trim(cv.caption), '[^\x00-\x7F]+', '', 'g')
   limit 1
 ) vc on true
 left join sports s on ap.sport_id = s.id
@@ -626,4 +637,37 @@ create policy "Authenticated users can insert dismissed_unmapped_ads" on dismiss
   for insert with check (auth.role() = 'authenticated');
 
 create policy "Authenticated users can delete dismissed_unmapped_ads" on dismissed_unmapped_ads
+  for delete using (auth.role() = 'authenticated');
+
+-- Manual ad links (for explicitly linking unmapped ads to creators)
+create table if not exists manual_ad_links (
+  id uuid primary key default uuid_generate_v4(),
+  ad_name text not null unique,
+  creator_id uuid not null references creators(id) on delete cascade,
+  linked_by text,
+  created_at timestamp with time zone default now()
+);
+
+-- Index for fast lookup
+create index if not exists idx_manual_ad_links_ad_name on manual_ad_links(ad_name);
+create index if not exists idx_manual_ad_links_creator on manual_ad_links(creator_id);
+
+-- RLS for manual_ad_links
+alter table manual_ad_links enable row level security;
+
+drop policy if exists "Authenticated users can read all manual_ad_links" on manual_ad_links;
+drop policy if exists "Authenticated users can insert manual_ad_links" on manual_ad_links;
+drop policy if exists "Authenticated users can update manual_ad_links" on manual_ad_links;
+drop policy if exists "Authenticated users can delete manual_ad_links" on manual_ad_links;
+
+create policy "Authenticated users can read all manual_ad_links" on manual_ad_links
+  for select using (auth.role() = 'authenticated');
+
+create policy "Authenticated users can insert manual_ad_links" on manual_ad_links
+  for insert with check (auth.role() = 'authenticated');
+
+create policy "Authenticated users can update manual_ad_links" on manual_ad_links
+  for update using (auth.role() = 'authenticated');
+
+create policy "Authenticated users can delete manual_ad_links" on manual_ad_links
   for delete using (auth.role() = 'authenticated');
