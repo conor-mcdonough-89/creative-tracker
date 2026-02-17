@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { AlertTriangle, X, CheckCircle2, Trash2, RefreshCw } from 'lucide-react'
+import { AlertTriangle, X, CheckCircle2, Trash2, RefreshCw, Link2 } from 'lucide-react'
+import { ManualLinkDialog } from './ManualLinkDialog'
 import type { Platform } from '@/lib/types'
 
 interface UnmappedAd {
@@ -20,6 +21,7 @@ export function UnmappedAdsSection() {
   const [dismissedAds, setDismissedAds] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [dismissing, setDismissing] = useState<string | null>(null)
+  const [linkingAd, setLinkingAd] = useState<string | null>(null)
 
   const supabase = createClient()
 
@@ -144,6 +146,25 @@ export function UnmappedAdsSection() {
     setDismissing(null)
   }
 
+  const handleManualLink = async (creatorId: string, creatorName: string) => {
+    if (!linkingAd) return
+
+    const { data: { user } } = await supabase.auth.getUser()
+
+    const { error } = await supabase
+      .from('manual_ad_links')
+      .insert({
+        ad_name: linkingAd,
+        creator_id: creatorId,
+        linked_by: user?.email || null,
+      })
+
+    if (!error) {
+      // Remove from unmapped list since it's now linked
+      setUnmappedAds((prev) => prev.filter((a) => a.ad_name !== linkingAd))
+    }
+  }
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       month: 'short',
@@ -258,20 +279,39 @@ export function UnmappedAdsSection() {
                     {formatDate(ad.first_seen)}
                   </td>
                   <td className="px-4 py-2 text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDismiss(ad.ad_name)}
-                      disabled={dismissing === ad.ad_name}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setLinkingAd(ad.ad_name)}
+                        title="Link to creator"
+                      >
+                        <Link2 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDismiss(ad.ad_name)}
+                        disabled={dismissing === ad.ad_name}
+                        title="Dismiss"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+
+        {/* Manual Link Dialog */}
+        <ManualLinkDialog
+          open={linkingAd !== null}
+          onOpenChange={(open) => !open && setLinkingAd(null)}
+          adName={linkingAd || ''}
+          onLink={handleManualLink}
+        />
       </CardContent>
     </Card>
   )
