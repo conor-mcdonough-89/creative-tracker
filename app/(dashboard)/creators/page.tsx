@@ -53,7 +53,7 @@ export default function CreatorsPage() {
     loadData()
   }, [supabase])
 
-  // Load performance data
+  // Load performance data (use ads_with_creators view for proper matching)
   useEffect(() => {
     const loadPerformanceData = async () => {
       if (!dateRange?.from || !dateRange?.to) return
@@ -61,7 +61,7 @@ export default function CreatorsPage() {
       setLoading(true)
 
       let query = supabase
-        .from('ad_performance')
+        .from('ads_with_creators')
         .select('*')
         .gte('date', format(dateRange.from, 'yyyy-MM-dd'))
         .lte('date', format(dateRange.to, 'yyyy-MM-dd'))
@@ -85,17 +85,12 @@ export default function CreatorsPage() {
     loadPerformanceData()
   }, [supabase, dateRange, selectedPlatforms, selectedSports])
 
-  // Calculate creator performance
+  // Calculate creator performance (use creator_id from ads_with_creators view)
   const creatorsWithPerformance = useMemo((): CreatorWithPerformance[] => {
     return creators.map((creator) => {
-      // Find patterns for this creator
-      const creatorPatterns = patterns.filter((p) => p.creator_id === creator.id)
-
-      // Find matching ads
+      // Find ads matched to this creator (via patterns, manual links, or video captions)
       const matchingAds = performanceData.filter((ad) =>
-        creatorPatterns.some((pattern) =>
-          ad.ad_name.toLowerCase().includes(pattern.pattern.toLowerCase())
-        )
+        (ad as AdPerformance & { creator_id: string | null }).creator_id === creator.id
       )
 
       // Aggregate performance

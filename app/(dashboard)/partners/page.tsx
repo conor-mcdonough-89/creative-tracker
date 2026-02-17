@@ -50,7 +50,7 @@ export default function PartnersPage() {
     loadData()
   }, [supabase])
 
-  // Load performance data
+  // Load performance data (use ads_with_partners view for proper matching)
   useEffect(() => {
     const loadPerformanceData = async () => {
       if (!dateRange?.from || !dateRange?.to) return
@@ -58,7 +58,7 @@ export default function PartnersPage() {
       setLoading(true)
 
       const query = supabase
-        .from('ad_performance')
+        .from('ads_with_partners')
         .select('*')
         .gte('date', format(dateRange.from, 'yyyy-MM-dd'))
         .lte('date', format(dateRange.to, 'yyyy-MM-dd'))
@@ -74,17 +74,12 @@ export default function PartnersPage() {
     loadPerformanceData()
   }, [supabase, dateRange])
 
-  // Calculate partner performance with status
+  // Calculate partner performance with status (use partner_id from ads_with_partners view)
   const partnersWithPerformance = useMemo((): PartnerWithPerformance[] => {
     return partners.map((partner) => {
-      // Find patterns for this partner
-      const partnerPatterns = patterns.filter((p) => p.partner_id === partner.id)
-
-      // Find matching ads
+      // Find ads matched to this partner via the view
       const matchingAds = performanceData.filter((ad) =>
-        partnerPatterns.some((pattern) =>
-          ad.ad_name.toLowerCase().includes(pattern.pattern.toLowerCase())
-        )
+        (ad as AdPerformance & { partner_id: string | null }).partner_id === partner.id
       )
 
       // Aggregate performance

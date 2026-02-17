@@ -28,7 +28,8 @@ import { useDateRange } from '@/lib/date-context'
 import { FilterBar } from '@/components/dashboard/FilterBar'
 import { usePlatformAdjustments } from '@/hooks/usePlatformAdjustments'
 import { formatCurrency, formatCompactNumber } from '@/lib/calculations'
-import { Search, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
+import { ManualLinkDialog } from '@/components/upload/ManualLinkDialog'
+import { Search, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Link2 } from 'lucide-react'
 import type { Platform, Sport, Creator, CreatorPattern, AdWithRelations } from '@/lib/types'
 
 interface AggregatedAd {
@@ -62,6 +63,7 @@ export default function AdsPage() {
   const [patterns, setPatterns] = useState<CreatorPattern[]>([])
   const [performanceData, setPerformanceData] = useState<AdWithRelations[]>([])
   const [loading, setLoading] = useState(true)
+  const [linkingAd, setLinkingAd] = useState<string | null>(null)
 
   const supabase = createClient()
 
@@ -116,6 +118,35 @@ export default function AdsPage() {
 
     loadPerformanceData()
   }, [supabase, dateRange, selectedPlatforms, selectedSports])
+
+  // Handle manual linking
+  const handleManualLink = async (creatorId: string, creatorName: string) => {
+    if (!linkingAd) return
+
+    const { data: { user } } = await supabase.auth.getUser()
+
+    const { error } = await supabase
+      .from('manual_ad_links')
+      .insert({
+        ad_name: linkingAd,
+        creator_id: creatorId,
+        linked_by: user?.email || null,
+      })
+
+    if (!error) {
+      // Refresh the data to show the new mapping
+      const query = supabase
+        .from('ads_with_creators')
+        .select('*')
+        .gte('date', format(dateRange!.from!, 'yyyy-MM-dd'))
+        .lte('date', format(dateRange!.to!, 'yyyy-MM-dd'))
+
+      const { data } = await query.order('date', { ascending: false })
+      if (data) {
+        setPerformanceData(data as AdWithRelations[])
+      }
+    }
+  }
 
   // Aggregate ads (view already provides creator matching and platform adjustments)
   const aggregatedAds = useMemo((): AggregatedAd[] => {
@@ -445,7 +476,15 @@ export default function AdsPage() {
                         {ad.creator_name}
                       </Link>
                     ) : (
-                      <span className="text-muted-foreground">Unassigned</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-muted-foreground hover:text-primary gap-1 -ml-2"
+                        onClick={() => setLinkingAd(ad.ad_name)}
+                      >
+                        <Link2 className="h-3 w-3" />
+                        Unassigned
+                      </Button>
                     )}
                   </TableCell>
                   <TableCell>
@@ -497,6 +536,14 @@ export default function AdsPage() {
           Showing first 100 results. Use filters to narrow down.
         </p>
       )}
+
+      {/* Manual Link Dialog */}
+      <ManualLinkDialog
+        open={linkingAd !== null}
+        onOpenChange={(open) => !open && setLinkingAd(null)}
+        adName={linkingAd || ''}
+        onLink={handleManualLink}
+      />
     </div>
   )
 }
