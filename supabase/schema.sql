@@ -242,7 +242,7 @@ create trigger on_auth_user_created
 
 -- View for ads with creator matching (using pattern matching and video captions)
 -- Includes platform-adjusted conversion values
--- Matching priority: 1) creator_patterns (substring), 2) creator_videos.caption (exact)
+-- Matching priority: 1) creator_patterns (substring), 2) creator_videos.caption (trimmed)
 create or replace view ads_with_creators as
 select
   ap.*,
@@ -262,14 +262,14 @@ left join lateral (
   where ap.ad_name ilike '%' || cp.pattern || '%'
   limit 1
 ) c on true
--- Second priority: video caption matching (exact match, only if pattern didn't match)
+-- Second priority: video caption matching (trimmed match, only if pattern didn't match)
 left join lateral (
   select cv.creator_id, cr.name as creator_name, cr.handle as creator_handle
   from creator_videos cv
   join creators cr on cv.creator_id = cr.id
   where c.creator_id is null  -- Only try if pattern match failed
     and cv.caption is not null
-    and ap.ad_name = cv.caption
+    and trim(ap.ad_name) = trim(cv.caption)
   limit 1
 ) vc on true
 left join sports s on ap.sport_id = s.id
