@@ -17,6 +17,7 @@ import {
   Video,
   SlidersHorizontal,
   History,
+  ListTodo,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -55,6 +56,11 @@ const navigation = [
     name: 'Upload Data',
     href: '/upload',
     icon: Upload,
+  },
+  {
+    name: 'Notes',
+    href: '/notes',
+    icon: ListTodo,
   },
 ]
 
