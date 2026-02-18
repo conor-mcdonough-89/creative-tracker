@@ -671,3 +671,39 @@ create policy "Authenticated users can update manual_ad_links" on manual_ad_link
 
 create policy "Authenticated users can delete manual_ad_links" on manual_ad_links
   for delete using (auth.role() = 'authenticated');
+
+-- Admin notes/todos
+create table if not exists admin_todos (
+  id uuid primary key default uuid_generate_v4(),
+  content text not null,
+  completed boolean not null default false,
+  sort_order integer not null default 0,
+  created_at timestamp with time zone default now(),
+  updated_at timestamp with time zone default now()
+);
+
+drop trigger if exists update_admin_todos_updated_at on admin_todos;
+create trigger update_admin_todos_updated_at
+  before update on admin_todos
+  for each row execute function update_updated_at_column();
+
+create index if not exists idx_admin_todos_sort on admin_todos(sort_order);
+
+alter table admin_todos enable row level security;
+
+drop policy if exists "Authenticated users can read all admin_todos" on admin_todos;
+drop policy if exists "Authenticated users can insert admin_todos" on admin_todos;
+drop policy if exists "Authenticated users can update admin_todos" on admin_todos;
+drop policy if exists "Authenticated users can delete admin_todos" on admin_todos;
+
+create policy "Authenticated users can read all admin_todos" on admin_todos
+  for select using (auth.role() = 'authenticated');
+
+create policy "Authenticated users can insert admin_todos" on admin_todos
+  for insert with check (auth.role() = 'authenticated');
+
+create policy "Authenticated users can update admin_todos" on admin_todos
+  for update using (auth.role() = 'authenticated');
+
+create policy "Authenticated users can delete admin_todos" on admin_todos
+  for delete using (auth.role() = 'authenticated');
