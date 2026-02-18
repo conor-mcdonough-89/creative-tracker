@@ -27,9 +27,11 @@ npm run start    # Start production server
 - `app/(dashboard)/` - Route group for authenticated pages (uses `force-dynamic` to disable prerendering)
 - `app/login/` and `app/auth/` - Authentication flow
 - `components/ui/` - shadcn/ui base components
+- `components/layout/` - Sidebar and Header shared layout components
 - `components/dashboard/`, `creators/`, `videos/`, `upload/` - Feature-specific components
 - `lib/supabase/server.ts` - Server-side Supabase client (uses cookies)
 - `lib/supabase/client.ts` - Browser-side Supabase client
+- `hooks/usePlatformAdjustments.ts` - Loads per-platform multipliers from DB and syncs to `lib/calculations.ts`
 
 ### Data Model
 
@@ -48,7 +50,7 @@ The app tracks ad performance across Meta, TikTok, and Google platforms:
 
 **Creator-Ad Matching**: Ads are linked to creators via pattern matching. The `creator_patterns` table stores substring patterns; when an ad name contains a pattern (case-insensitive), it's attributed to that creator.
 
-**Platform Adjustments** (`lib/calculations.ts`): Conversion values are adjusted per platform (e.g., Meta defaults to 50% multiplier). Adjustments are stored in DB and loaded via `usePlatformAdjustments` hook.
+**Platform Adjustments** (`lib/calculations.ts`): Conversion values are scaled per platform using a multiplier stored in `platform_adjustments` (e.g., Meta defaults to `0.5`, meaning 50% of the reported value is used). Multipliers are loaded from DB via `usePlatformAdjustments` and stored in a module-level variable in `lib/calculations.ts`. The `settings/adjustments` page is restricted to `ADMIN_EMAIL` (`conor@sidelineswap.com`). `lib/calculations.ts` also exports metric helpers: `calculateCTR`, `calculateCPM`, `calculateCPC`, `calculateROAS`, `aggregatePerformance`, and formatting utilities (`formatCurrency`, `formatCompactNumber`, etc.).
 
 **Revenue Calculations**:
 - GMV = conversion_value (after platform adjustment)
