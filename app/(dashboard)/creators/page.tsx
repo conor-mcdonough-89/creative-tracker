@@ -13,7 +13,7 @@ import { CreatorTable } from '@/components/creators/CreatorTable'
 import { usePlatformAdjustments } from '@/hooks/usePlatformAdjustments'
 import { aggregatePerformance } from '@/lib/calculations'
 import { Plus, Download, Receipt } from 'lucide-react'
-import type { Platform, Sport, Creator, CreatorPattern, AdPerformance, CreatorWithPerformance } from '@/lib/types'
+import type { Platform, Sport, Creator, CreatorPattern, AdWithRelations, CreatorWithPerformance } from '@/lib/types'
 
 export default function CreatorsPage() {
   const router = useRouter()
@@ -25,7 +25,7 @@ export default function CreatorsPage() {
   const [sports, setSports] = useState<Sport[]>([])
   const [creators, setCreators] = useState<Creator[]>([])
   const [patterns, setPatterns] = useState<CreatorPattern[]>([])
-  const [performanceData, setPerformanceData] = useState<AdPerformance[]>([])
+  const [performanceData, setPerformanceData] = useState<AdWithRelations[]>([])
   const [loading, setLoading] = useState(true)
   const [sortField, setSortField] = useState('payout')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
@@ -77,7 +77,7 @@ export default function CreatorsPage() {
       const { data, error } = await query
 
       if (data && !error) {
-        setPerformanceData(data as AdPerformance[])
+        setPerformanceData(data as AdWithRelations[])
       }
       setLoading(false)
     }
@@ -89,9 +89,7 @@ export default function CreatorsPage() {
   const creatorsWithPerformance = useMemo((): CreatorWithPerformance[] => {
     return creators.map((creator) => {
       // Find ads matched to this creator (via patterns, manual links, or video captions)
-      const matchingAds = performanceData.filter((ad) =>
-        (ad as AdPerformance & { creator_id: string | null }).creator_id === creator.id
-      )
+      const matchingAds = performanceData.filter((ad) => ad.creator_id === creator.id)
 
       // Aggregate performance
       const performance = matchingAds.length > 0
