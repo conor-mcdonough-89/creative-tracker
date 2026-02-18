@@ -79,6 +79,7 @@ export default function CreatorDetailPage() {
   }, [supabase, creatorId])
 
   // Load performance data (use ads_with_creators view for proper matching)
+  // Paginate to fetch all rows (Supabase defaults to 1000 row limit)
   useEffect(() => {
     const loadPerformanceData = async () => {
       if (!dateRange?.from || !dateRange?.to || !creatorId) {
@@ -88,18 +89,32 @@ export default function CreatorDetailPage() {
 
       setLoading(true)
 
-      // Query ads matched to this creator via the view
-      const { data, error } = await supabase
-        .from('ads_with_creators')
-        .select('*')
-        .eq('creator_id', creatorId)
-        .gte('date', format(dateRange.from, 'yyyy-MM-dd'))
-        .lte('date', format(dateRange.to, 'yyyy-MM-dd'))
-        .order('date', { ascending: false })
+      const pageSize = 1000
+      let allData: AdPerformance[] = []
+      let from = 0
+      let hasMore = true
 
-      if (data && !error) {
-        setPerformanceData(data as AdPerformance[])
+      while (hasMore) {
+        // Query ads matched to this creator via the view
+        const { data, error } = await supabase
+          .from('ads_with_creators')
+          .select('*')
+          .eq('creator_id', creatorId)
+          .gte('date', format(dateRange.from, 'yyyy-MM-dd'))
+          .lte('date', format(dateRange.to, 'yyyy-MM-dd'))
+          .order('date', { ascending: false })
+          .range(from, from + pageSize - 1)
+
+        if (data && !error) {
+          allData = [...allData, ...(data as AdPerformance[])]
+          hasMore = data.length === pageSize
+        } else {
+          hasMore = false
+        }
+        from += pageSize
       }
+
+      setPerformanceData(allData)
       setLoading(false)
     }
 

@@ -68,37 +68,53 @@ export default function DashboardPage() {
   }, [supabase])
 
   // Load performance data based on filters - only matched ads (with creator)
+  // Paginate to fetch all rows (Supabase defaults to 1000 row limit)
   useEffect(() => {
     const loadPerformanceData = async () => {
       if (!dateRange?.from || !dateRange?.to) return
 
       setLoading(true)
 
-      // Query the view that includes creator matching, filter for matched ads only
-      let query = supabase
-        .from('ads_with_creators')
-        .select('*')
-        .not('creator_id', 'is', null) // Only include ads matched to a creator
-        .gte('date', format(dateRange.from, 'yyyy-MM-dd'))
-        .lte('date', format(dateRange.to, 'yyyy-MM-dd'))
+      const pageSize = 1000
+      let allData: AdWithRelations[] = []
+      let from = 0
+      let hasMore = true
 
-      if (selectedPlatforms.length > 0) {
-        query = query.in('platform', selectedPlatforms)
+      while (hasMore) {
+        // Query the view that includes creator matching, filter for matched ads only
+        let query = supabase
+          .from('ads_with_creators')
+          .select('*')
+          .not('creator_id', 'is', null) // Only include ads matched to a creator
+          .gte('date', format(dateRange.from, 'yyyy-MM-dd'))
+          .lte('date', format(dateRange.to, 'yyyy-MM-dd'))
+          .order('date')
+          .range(from, from + pageSize - 1)
+
+        if (selectedPlatforms.length > 0) {
+          query = query.in('platform', selectedPlatforms)
+        }
+
+        if (selectedSports.length > 0) {
+          query = query.in('sport_id', selectedSports)
+        }
+
+        if (selectedCreators.length > 0) {
+          query = query.in('creator_id', selectedCreators)
+        }
+
+        const { data, error } = await query
+
+        if (data && !error) {
+          allData = [...allData, ...(data as AdWithRelations[])]
+          hasMore = data.length === pageSize
+        } else {
+          hasMore = false
+        }
+        from += pageSize
       }
 
-      if (selectedSports.length > 0) {
-        query = query.in('sport_id', selectedSports)
-      }
-
-      if (selectedCreators.length > 0) {
-        query = query.in('creator_id', selectedCreators)
-      }
-
-      const { data, error } = await query.order('date')
-
-      if (data && !error) {
-        setPerformanceData(data as AdWithRelations[])
-      }
+      setPerformanceData(allData)
       setLoading(false)
     }
 
