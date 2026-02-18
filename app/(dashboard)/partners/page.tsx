@@ -51,23 +51,36 @@ export default function PartnersPage() {
   }, [supabase])
 
   // Load performance data (use ads_with_partners view for proper matching)
+  // Paginate to fetch all rows (Supabase defaults to 1000 row limit)
   useEffect(() => {
     const loadPerformanceData = async () => {
       if (!dateRange?.from || !dateRange?.to) return
 
       setLoading(true)
 
-      const query = supabase
-        .from('ads_with_partners')
-        .select('*')
-        .gte('date', format(dateRange.from, 'yyyy-MM-dd'))
-        .lte('date', format(dateRange.to, 'yyyy-MM-dd'))
+      const pageSize = 1000
+      let allData: AdPerformance[] = []
+      let from = 0
+      let hasMore = true
 
-      const { data, error } = await query
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('ads_with_partners')
+          .select('*')
+          .gte('date', format(dateRange.from, 'yyyy-MM-dd'))
+          .lte('date', format(dateRange.to, 'yyyy-MM-dd'))
+          .range(from, from + pageSize - 1)
 
-      if (data && !error) {
-        setPerformanceData(data as AdPerformance[])
+        if (data && !error) {
+          allData = [...allData, ...(data as AdPerformance[])]
+          hasMore = data.length === pageSize
+        } else {
+          hasMore = false
+        }
+        from += pageSize
       }
+
+      setPerformanceData(allData)
       setLoading(false)
     }
 

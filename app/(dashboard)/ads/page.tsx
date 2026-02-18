@@ -87,32 +87,48 @@ export default function AdsPage() {
   }, [supabase])
 
   // Load performance data
+  // Paginate to fetch all rows (Supabase defaults to 1000 row limit)
   useEffect(() => {
     const loadPerformanceData = async () => {
       if (!dateRange?.from || !dateRange?.to) return
 
       setLoading(true)
 
-      // Query the view that includes pre-calculated platform adjustments
-      let query = supabase
-        .from('ads_with_creators')
-        .select('*')
-        .gte('date', format(dateRange.from, 'yyyy-MM-dd'))
-        .lte('date', format(dateRange.to, 'yyyy-MM-dd'))
+      const pageSize = 1000
+      let allData: AdWithRelations[] = []
+      let from = 0
+      let hasMore = true
 
-      if (selectedPlatforms.length > 0) {
-        query = query.in('platform', selectedPlatforms)
+      while (hasMore) {
+        // Query the view that includes pre-calculated platform adjustments
+        let query = supabase
+          .from('ads_with_creators')
+          .select('*')
+          .gte('date', format(dateRange.from, 'yyyy-MM-dd'))
+          .lte('date', format(dateRange.to, 'yyyy-MM-dd'))
+          .order('date', { ascending: false })
+          .range(from, from + pageSize - 1)
+
+        if (selectedPlatforms.length > 0) {
+          query = query.in('platform', selectedPlatforms)
+        }
+
+        if (selectedSports.length > 0) {
+          query = query.in('sport_id', selectedSports)
+        }
+
+        const { data, error } = await query
+
+        if (data && !error) {
+          allData = [...allData, ...(data as AdWithRelations[])]
+          hasMore = data.length === pageSize
+        } else {
+          hasMore = false
+        }
+        from += pageSize
       }
 
-      if (selectedSports.length > 0) {
-        query = query.in('sport_id', selectedSports)
-      }
-
-      const { data, error } = await query.order('date', { ascending: false })
-
-      if (data && !error) {
-        setPerformanceData(data as AdWithRelations[])
-      }
+      setPerformanceData(allData)
       setLoading(false)
     }
 
