@@ -20,6 +20,17 @@ import { DataPreview } from '@/components/upload/DataPreview'
 import { UnmappedAdsSection } from '@/components/upload/UnmappedAdsSection'
 import { Upload, FileText, CheckCircle2, AlertCircle, AlertTriangle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { format } from 'date-fns'
 import type { Platform, ColumnPreset, CanonicalField, CSVRow, Sport } from '@/lib/types'
 
 type UploadStep = 'select-platform' | 'upload-file' | 'map-columns' | 'preview' | 'complete'
@@ -61,8 +72,32 @@ export default function UploadPage() {
   const [sports, setSports] = useState<Sport[]>([])
   const [selectedPreset, setSelectedPreset] = useState<ColumnPreset | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [checkingOverlaps, setCheckingOverlaps] = useState(false)
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [showOverlapWarning, setShowOverlapWarning] = useState(false)
+  const [overlapInfo, setOverlapInfo] = useState<{
+    overlapCount: number
+    totalIncoming: number
+    newCount: number
+    dateRange: { start: string; end: string }
+  } | null>(null)
+  const [pendingUploadData, setPendingUploadData] = useState<{
+    deduped: Array<{
+      ad_name: string
+      platform: Platform
+      date: string
+      impressions: number
+      clicks: number
+      spend: number
+      conversions: number
+      conversion_value: number
+      video_views: number | null
+      creative_url: string | null
+      sport_id: string | null
+    }>
+    userEmail: string | null
+  } | null>(null)
 
   const supabase = createClient()
   const router = useRouter()
@@ -198,10 +233,120 @@ export default function UploadPage() {
     return true
   }
 
+  const executeUpload = async (deduped: typeof pendingUploadData extends { deduped: infer T } | null ? T : never, userEmail: string | null) => {
+    try {
+      // Calculate date range from records
+      const dates = deduped.map(r => r.date).filter(Boolean).sort()
+      const dateRangeStart = dates[0] || null
+      const dateRangeEnd = dates[dates.length - 1] || null
+
+      // Create import log first
+      const { data: importLog, error: importLogError } = await supabase
+        .from('import_logs')
+        .insert({
+          file_name: file?.name || 'unknown',
+          platform: deduped[0]?.platform || platform,
+          record_count: deduped.length,
+          date_range_start: dateRangeStart,
+          date_range_end: dateRangeEnd,
+          imported_by: userEmail,
+          status: 'completed',
+        })
+        .select()
+        .single()
+
+      if (importLogError) {
+        throw new Error(`Failed to create import log: ${importLogError.message}`)
+      }
+
+      // Add import_id to all records
+      const recordsWithImportId = deduped.map(record => ({
+        ...record,
+        import_id: importLog.id,
+      }))
+
+      // Upsert data
+      const { error: uploadError } = await supabase
+        .from('ad_performance')
+        .upsert(recordsWithImportId, {
+          onConflict: 'ad_name,platform,date',
+          ignoreDuplicates: false,
+        })
+
+      if (uploadError) {
+        // If upload fails, delete import log
+        await supabase
+          .from('import_logs')
+          .delete()
+          .eq('id', importLog.id)
+        throw new Error(uploadError.message)
+      }
+
+      // Get unique ad names from uploaded data
+      const uniqueAdNames = [...new Set(deduped.map((r) => r.ad_name))]
+
+      // Check which ads match creator patterns
+      const { data: patterns } = await supabase
+        .from('creator_patterns')
+        .select('pattern')
+
+      const matchedAds: string[] = []
+      const unmatchedAds: string[] = []
+
+      if (patterns) {
+        for (const adName of uniqueAdNames) {
+          const hasMatch = patterns.some((p) =>
+            adName.toLowerCase().includes(p.pattern.toLowerCase())
+          )
+          if (hasMatch) {
+            matchedAds.push(adName)
+          } else {
+            unmatchedAds.push(adName)
+          }
+        }
+      } else {
+        // No patterns exist, all ads are unmatched
+        unmatchedAds.push(...uniqueAdNames)
+      }
+
+      setUploadResult({
+        success: true,
+        message: `Successfully imported ${deduped.length} records`,
+        totalRecords: deduped.length,
+        uniqueAds: uniqueAdNames.length,
+        matchedAds: matchedAds.length,
+        unmatchedAds: unmatchedAds,
+      })
+      setStep('complete')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed')
+    } finally {
+      setUploading(false)
+      setPendingUploadData(null)
+    }
+  }
+
+  const handleConfirmOverwrite = () => {
+    setShowOverlapWarning(false)
+    setOverlapInfo(null)
+    if (pendingUploadData) {
+      setUploading(true)
+      executeUpload(pendingUploadData.deduped, pendingUploadData.userEmail)
+    }
+  }
+
+  const handleCancelOverwrite = () => {
+    setShowOverlapWarning(false)
+    setOverlapInfo(null)
+    setPendingUploadData(null)
+    setUploading(false)
+    setCheckingOverlaps(false)
+  }
+
   const handleUpload = async () => {
     if (!platform || !validateMappings()) return
 
-    setUploading(true)
+    setCheckingOverlaps(true)
     setError(null)
 
     try {
@@ -263,92 +408,72 @@ export default function UploadPage() {
         }, new Map()).values()
       ) as typeof records
 
-      // Calculate date range from records
+      // Check for overlapping records in the database
       const dates = deduped.map(r => r.date).filter(Boolean).sort()
-      const dateRangeStart = dates[0] || null
-      const dateRangeEnd = dates[dates.length - 1] || null
+      const minDate = dates[0]
+      const maxDate = dates[dates.length - 1]
 
-      // Create import log first
-      const { data: importLog, error: importLogError } = await supabase
-        .from('import_logs')
-        .insert({
-          file_name: file?.name || 'unknown',
-          platform,
-          record_count: deduped.length,
-          date_range_start: dateRangeStart,
-          date_range_end: dateRangeEnd,
-          imported_by: userEmail,
-          status: 'completed',
-        })
-        .select()
-        .single()
+      if (minDate && maxDate) {
+        // Fetch existing (ad_name, date) pairs for this platform + date range
+        const existingKeys = new Set<string>()
+        let page = 0
+        const pageSize = 1000
+        let hasMore = true
 
-      if (importLogError) {
-        throw new Error(`Failed to create import log: ${importLogError.message}`)
-      }
+        while (hasMore) {
+          const { data } = await supabase
+            .from('ad_performance')
+            .select('ad_name, date')
+            .eq('platform', platform)
+            .gte('date', minDate)
+            .lte('date', maxDate)
+            .range(page * pageSize, (page + 1) * pageSize - 1)
 
-      // Add import_id to all records
-      const recordsWithImportId = deduped.map(record => ({
-        ...record,
-        import_id: importLog.id,
-      }))
-
-      // Upsert data
-      const { error: uploadError } = await supabase
-        .from('ad_performance')
-        .upsert(recordsWithImportId, {
-          onConflict: 'ad_name,platform,date',
-          ignoreDuplicates: false,
-        })
-
-      if (uploadError) {
-        // If upload fails, mark import log as failed
-        await supabase
-          .from('import_logs')
-          .delete()
-          .eq('id', importLog.id)
-        throw new Error(uploadError.message)
-      }
-
-      // Get unique ad names from uploaded data
-      const uniqueAdNames = [...new Set(records.map((r) => r.ad_name))]
-
-      // Check which ads match creator patterns
-      const { data: patterns } = await supabase
-        .from('creator_patterns')
-        .select('pattern')
-
-      const matchedAds: string[] = []
-      const unmatchedAds: string[] = []
-
-      if (patterns) {
-        for (const adName of uniqueAdNames) {
-          const hasMatch = patterns.some((p) =>
-            adName.toLowerCase().includes(p.pattern.toLowerCase())
-          )
-          if (hasMatch) {
-            matchedAds.push(adName)
+          if (!data || data.length === 0) {
+            hasMore = false
           } else {
-            unmatchedAds.push(adName)
+            data.forEach(row => existingKeys.add(`${row.ad_name}|${row.date}`))
+            if (data.length < pageSize) hasMore = false
+            page++
           }
         }
-      } else {
-        // No patterns exist, all ads are unmatched
-        unmatchedAds.push(...uniqueAdNames)
+
+        // Count overlaps
+        let overlapCount = 0
+        let overlapMinDate = ''
+        let overlapMaxDate = ''
+
+        for (const record of deduped) {
+          const key = `${record.ad_name}|${record.date}`
+          if (existingKeys.has(key)) {
+            overlapCount++
+            if (!overlapMinDate || record.date < overlapMinDate) overlapMinDate = record.date
+            if (!overlapMaxDate || record.date > overlapMaxDate) overlapMaxDate = record.date
+          }
+        }
+
+        if (overlapCount > 0) {
+          // Store pending data and show warning
+          setPendingUploadData({ deduped, userEmail })
+          setOverlapInfo({
+            overlapCount,
+            totalIncoming: deduped.length,
+            newCount: deduped.length - overlapCount,
+            dateRange: { start: overlapMinDate, end: overlapMaxDate },
+          })
+          setShowOverlapWarning(true)
+          setCheckingOverlaps(false)
+          return
+        }
       }
 
-      setUploadResult({
-        success: true,
-        message: `Successfully imported ${records.length} records`,
-        totalRecords: records.length,
-        uniqueAds: uniqueAdNames.length,
-        matchedAds: matchedAds.length,
-        unmatchedAds: unmatchedAds,
-      })
-      setStep('complete')
+      // No overlaps — proceed directly
+      setCheckingOverlaps(false)
+      setUploading(true)
+      await executeUpload(deduped, userEmail)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed')
-    } finally {
+      setCheckingOverlaps(false)
       setUploading(false)
     }
   }
@@ -363,6 +488,10 @@ export default function UploadPage() {
     setSelectedPreset(null)
     setUploadResult(null)
     setError(null)
+    setShowOverlapWarning(false)
+    setOverlapInfo(null)
+    setPendingUploadData(null)
+    setCheckingOverlaps(false)
   }
 
   return (
@@ -549,8 +678,8 @@ export default function UploadPage() {
               <Button variant="outline" onClick={() => setStep('map-columns')}>
                 Back
               </Button>
-              <Button onClick={handleUpload} disabled={uploading}>
-                {uploading ? 'Importing...' : `Import ${csvData.length} Records`}
+              <Button onClick={handleUpload} disabled={uploading || checkingOverlaps}>
+                {checkingOverlaps ? 'Checking...' : uploading ? 'Importing...' : `Import ${csvData.length} Records`}
               </Button>
             </div>
           </CardContent>
@@ -648,6 +777,68 @@ export default function UploadPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Overlap warning dialog */}
+      <AlertDialog open={showOverlapWarning} onOpenChange={(open) => {
+        if (!open) handleCancelOverwrite()
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              Existing Data Will Be Overwritten
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>
+                  <strong>{overlapInfo?.overlapCount.toLocaleString()}</strong> of{' '}
+                  <strong>{overlapInfo?.totalIncoming.toLocaleString()}</strong> records
+                  in your upload already exist in the database and will be overwritten.
+                </p>
+                {overlapInfo?.dateRange.start && (
+                  <div className="rounded-md bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-900 p-3 text-sm">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <span className="text-muted-foreground">Platform:</span>{' '}
+                        <span className="font-medium capitalize">{platform}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Overlap dates:</span>{' '}
+                        <span className="font-medium">
+                          {format(new Date(overlapInfo.dateRange.start + 'T00:00:00'), 'MMM d, yyyy')}
+                          {' \u2013 '}
+                          {format(new Date(overlapInfo.dateRange.end + 'T00:00:00'), 'MMM d, yyyy')}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Will overwrite:</span>{' '}
+                        <span className="font-medium text-amber-600 dark:text-amber-400">
+                          {overlapInfo.overlapCount.toLocaleString()} records
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">New records:</span>{' '}
+                        <span className="font-medium text-green-600 dark:text-green-400">
+                          {overlapInfo.newCount.toLocaleString()} records
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <p className="text-sm text-muted-foreground">
+                  Overwritten records will have their metrics replaced with the new values from your upload.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmOverwrite}>
+              Continue with Import
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Unmapped Ads Review Section */}
       <UnmappedAdsSection />
