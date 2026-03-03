@@ -119,6 +119,17 @@ export default function VideosPage() {
     setDialogOpen(true)
   }
 
+  const handleStatusToggle = async (videoId: string, newStatus: AdStatus) => {
+    // Optimistically update local state
+    setVideos((prev) =>
+      prev.map((v) => (v.id === videoId ? { ...v, ad_status: newStatus } : v))
+    )
+    await supabase
+      .from('creator_videos')
+      .update({ ad_status: newStatus })
+      .eq('id', videoId)
+  }
+
   const handleDeleteVideo = async (videoId: string) => {
     const { error } = await supabase.from('creator_videos').delete().eq('id', videoId)
     if (!error) {
@@ -174,7 +185,7 @@ export default function VideosPage() {
           <p className="text-2xl font-bold text-green-600">{stats.running}</p>
         </div>
         <div className="rounded-lg border bg-card p-4">
-          <p className="text-sm text-muted-foreground">Not Running</p>
+          <p className="text-sm text-muted-foreground">Paused</p>
           <p className="text-2xl font-bold text-gray-500">{stats.notRunning}</p>
         </div>
         <div className="rounded-lg border bg-card p-4">
@@ -247,7 +258,7 @@ export default function VideosPage() {
           <SelectContent>
             <SelectItem value="all">All Statuses</SelectItem>
             <SelectItem value="running">Running</SelectItem>
-            <SelectItem value="not_running">Not Running</SelectItem>
+            <SelectItem value="not_running">Paused</SelectItem>
             <SelectItem value="completed">Completed</SelectItem>
             <SelectItem value="unknown">Unknown</SelectItem>
           </SelectContent>
@@ -261,6 +272,7 @@ export default function VideosPage() {
         onView={handleViewVideo}
         onEdit={handleEditVideo}
         onDelete={handleDeleteVideo}
+        onStatusToggle={handleStatusToggle}
       />
 
       {/* Add/Edit/View Dialog */}
