@@ -37,6 +37,7 @@ interface VideoTableProps {
   onView?: (video: CreatorVideoWithRelations) => void
   onEdit: (video: CreatorVideoWithRelations) => void
   onDelete: (videoId: string) => void
+  onStatusToggle?: (videoId: string, newStatus: AdStatus) => void
 }
 
 const platformLabels: Record<VideoPlatform, string> = {
@@ -48,12 +49,18 @@ const platformLabels: Record<VideoPlatform, string> = {
 
 const statusConfig: Record<AdStatus, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   running: { label: 'Running', variant: 'default' },
-  not_running: { label: 'Not Running', variant: 'secondary' },
+  not_running: { label: 'Paused', variant: 'secondary' },
   completed: { label: 'Completed', variant: 'outline' },
   unknown: { label: 'Unknown', variant: 'destructive' },
 }
 
-export function VideoTable({ videos, loading, onView, onEdit, onDelete }: VideoTableProps) {
+const toggleCycle: Partial<Record<AdStatus, AdStatus>> = {
+  unknown: 'running',
+  running: 'not_running',
+  not_running: 'unknown',
+}
+
+export function VideoTable({ videos, loading, onView, onEdit, onDelete, onStatusToggle }: VideoTableProps) {
   if (loading) {
     return (
       <div className="rounded-lg border">
@@ -170,9 +177,21 @@ export function VideoTable({ videos, loading, onView, onEdit, onDelete }: VideoT
                 </div>
               </TableCell>
               <TableCell>
-                <Badge variant={statusConfig[video.ad_status].variant}>
-                  {statusConfig[video.ad_status].label}
-                </Badge>
+                {onStatusToggle && toggleCycle[video.ad_status] !== undefined ? (
+                  <button
+                    onClick={() => onStatusToggle(video.id, toggleCycle[video.ad_status]!)}
+                    className="cursor-pointer"
+                    title="Click to cycle status"
+                  >
+                    <Badge variant={statusConfig[video.ad_status].variant}>
+                      {statusConfig[video.ad_status].label}
+                    </Badge>
+                  </button>
+                ) : (
+                  <Badge variant={statusConfig[video.ad_status].variant}>
+                    {statusConfig[video.ad_status].label}
+                  </Badge>
+                )}
               </TableCell>
               <TableCell>
                 <DropdownMenu>

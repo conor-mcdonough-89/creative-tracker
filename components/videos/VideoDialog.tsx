@@ -46,7 +46,7 @@ const platformOptions: { value: VideoPlatform; label: string }[] = [
 
 const statusOptions: { value: AdStatus; label: string }[] = [
   { value: 'running', label: 'Running' },
-  { value: 'not_running', label: 'Not Running' },
+  { value: 'not_running', label: 'Paused' },
   { value: 'completed', label: 'Completed' },
   { value: 'unknown', label: 'Unknown' },
 ]
