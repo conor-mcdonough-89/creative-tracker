@@ -243,7 +243,7 @@ create trigger on_auth_user_created
 -- View for ads with creator matching (using manual links, pattern matching, and video captions)
 -- Includes platform-adjusted conversion values
 -- Matching priority: 1) manual_ad_links (explicit), 2) creator_patterns (substring), 3) creator_videos.caption (normalized)
-create or replace view ads_with_creators as
+create or replace view ads_with_creators with (security_invoker = true) as
 select
   ap.*,
   COALESCE(m.creator_id, c.creator_id, vc.creator_id) as creator_id,
@@ -347,7 +347,7 @@ create policy "Authenticated users can delete creator_videos" on creator_videos
   for delete using (auth.role() = 'authenticated');
 
 -- View for creator videos with relations (caption is part of cv.*)
-create or replace view creator_videos_with_relations as
+create or replace view creator_videos_with_relations with (security_invoker = true) as
 select
   cv.*,
   c.name as creator_name,
